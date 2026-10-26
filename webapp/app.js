@@ -776,10 +776,11 @@
         <h1>${C.crisis.title}</h1>
         <p class="lead">${C.crisis.text}</p>
         ${C.crisis.contacts.map((c) => `
-          <div class="card contact">
-            <span><span class="title">${c.name}</span><span class="sub">${c.note}</span></span>
-            <a class="phone" href="tel:${c.phone.replace(/[^\d+]/g, "")}">${c.phone}</a>
-          </div>`).join("")}
+          <a class="card contact" href="tel:${c.phone.replace(/[^\d+]/g, "")}">
+            <span class="title">${c.name}</span>
+            <span class="sub">${c.note}</span>
+            <span class="phone">${icon("phone", 18)} ${c.phone}</span>
+          </a>`).join("")}
         <h2>Пока вы ждёте ответа</h2>
         <p>Если можете, побудьте рядом с другим человеком или напишите тому, кому доверяете. Уберите от себя то, чем можно причинить вред.</p>
         <button class="btn secondary" data-psy>Связаться с психологом ПсиЧата</button>
@@ -1077,7 +1078,7 @@
   backBtn.addEventListener("click", goBack);
   if (inTelegram && tg.BackButton) tg.BackButton.onClick(goBack);
   const crisisBtn = document.getElementById("crisis-btn");
-  crisisBtn.innerHTML = `${icon("phone", 16)} Мне очень плохо`;
+  crisisBtn.textContent = "Мне очень плохо";
   crisisBtn.addEventListener("click", () => go("crisis"));
   window.addEventListener("hashchange", route);
   // Первый экран рисуем, когда шрифты готовы (но не дольше 1 секунды), чтобы заголовки не перескакивали после появления.

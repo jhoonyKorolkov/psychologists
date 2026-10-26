@@ -379,8 +379,9 @@ button.card.node.current:hover { background: var(--soft-2); }
 .score { text-align: center; font: 700 64px/1 var(--font-display); letter-spacing: -0.05em; margin-top: -76px; font-variant-numeric: tabular-nums; }
 .score small { font-size: 20px; color: var(--muted); letter-spacing: 0; }
 
-.contact { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-.contact .phone { color: var(--danger); font: 700 17px var(--font-display); white-space: nowrap; text-decoration: none; user-select: all; }
+/* Карточка службы целиком нажимается и звонит: название, пояснение, под ними номер крупно. */
+.contact { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-decoration: none; color: inherit; }
+.contact .phone { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--danger); font: 700 22px/1.2 var(--font-display); letter-spacing: -0.01em; white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
