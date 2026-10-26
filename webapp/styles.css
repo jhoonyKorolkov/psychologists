@@ -259,6 +259,11 @@ button.card.warm:hover { background: var(--soft-2); }
 
 /* ---------- Дыхание ---------- */
 .orb-stage { position: relative; height: 330px; display: grid; place-items: center; }
+.orb-stage:not(.running) .orb-label span { display: none; }
+.orb-stage:not(.running) { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.orb-stage:not(.running) .orb-core { animation: invite 3.2s ease-in-out infinite; }
+.orb-stage:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 24px; }
+@keyframes invite { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
 .orb-halo, .orb-core {
   position: absolute; border-radius: 50%;
   transition-property: transform; transition-timing-function: cubic-bezier(.45, 0, .55, 1);

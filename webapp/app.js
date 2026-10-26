@@ -866,16 +866,16 @@
   function orbWidget() {
     const c = 2 * Math.PI * 140;
     return `
-      <div class="orb-stage">
+      <div class="orb-stage" id="orb-stage" role="button" tabindex="0" aria-label="Начать дыхание">
         <svg class="orb-ring" viewBox="0 0 300 300"><circle class="track" cx="150" cy="150" r="140"/>
           <circle class="bar" id="orb-bar" cx="150" cy="150" r="140" stroke-dasharray="${c}" stroke-dashoffset="${c}"/></svg>
         <div class="orb-halo h1" id="h1"></div>
         <div class="orb-halo h2" id="h2"></div>
         <div class="orb-core" id="core"></div>
         <canvas class="particles" id="orb-particles" aria-hidden="true"></canvas>
-        <div class="orb-label"><b id="orb-phase">Готовы?</b><span id="orb-sec"></span></div>
+        <div class="orb-label"><b id="orb-phase">Начать</b><span id="orb-sec"></span></div>
       </div>
-      <p class="timer" id="breath-left">&nbsp;</p>
+      <p class="timer" id="breath-left">Нажмите на круг, когда будете готовы</p>
       ${psyLink("Поговорить с психологом")}`;
   }
 
@@ -918,8 +918,25 @@
       phase++;
       later(step, dur * 1000);
     };
-    later(step, 900);
-    every(() => {
+    // Упражнение начинается по нажатию на круг, а до этого частицы просто медленно кружат.
+    const stage = document.getElementById("orb-stage");
+    let started = false;
+    const start = () => {
+      if (started) return;
+      started = true;
+      stage.classList.add("running");
+      stage.removeAttribute("role");
+      stage.removeAttribute("tabindex");
+      stage.removeAttribute("aria-label");
+      haptic("medium");
+      leftEl.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+      step();
+      run();
+    };
+    stage.addEventListener("click", start);
+    stage.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); start(); } });
+
+    const run = () => every(() => {
       left--;
       bar.style.strokeDashoffset = circ * Math.max(left, 0) / seconds;
       if (left <= 0) {
