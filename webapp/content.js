@@ -8,6 +8,8 @@ window.CONTENT = {
     psychatUrl: "https://psy-chat.ru/?utm_source=telegram&utm_medium=miniapp&utm_campaign=antitrevoga",
     // С какого дня курс становится платным. null — весь курс бесплатный (для прототипа).
     paidFromDay: null,
+    // Номер счётчика Яндекс Метрики (metrika.yandex.ru), например 98765432. null — аналитика выключена.
+    metrikaId: null,
   },
 
   crisis: {

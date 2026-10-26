@@ -20,10 +20,22 @@ Telegram Mini App для самопомощи при тревоге, котор�
 
 Откройте `webapp/index.html` в браузере. Вне Telegram приложение работает так же, только без темы и вибрации Telegram.
 
+## Публикация
+
+Папка `webapp/` публикуется на GitHub Pages автоматически при каждом пуше в `main` (`.github/workflows/pages.yml`).
+Адрес: `https://jhoonykorolkov.github.io/psychologists/`. Один раз нужно включить Pages: Settings → Pages → Source: GitHub Actions.
+
 ## Как подключить к Telegram
 
-1. Выложить папку `webapp/` на любой хостинг со статикой по HTTPS (например, GitHub Pages или сервер в РФ).
-2. В [@BotFather](https://t.me/BotFather): `/newbot`, затем `/newapp` (или Bot Settings → Menu Button) и указать адрес приложения.
-3. Ссылка вида `https://t.me/<бот>/<app>` открывает приложение сразу.
+1. В [@BotFather](https://t.me/BotFather): `/newbot`, затем `/newapp` и указать адрес приложения.
+2. Там же Bot Settings → Menu Button → тот же адрес, чтобы приложение открывалось кнопкой в чате с ботом.
+3. Ссылка вида `https://t.me/<бот>/<app>` открывает приложение сразу, её и используем в рекламе.
+
+## Аналитика
+
+Номер счётчика Яндекс Метрики вписывается в `metrikaId` в `webapp/content.js`. Приложение отправляет просмотры экранов и цели:
+`psychat_click` (переход в ПсиЧат, с экраном, откуда ушли), `test_done` (уровень тревоги без ответов), `sos_open`, `crisis_open`,
+`practice_done`, `course_day_done`, `mood_set`. Переходы в ПсиЧат помечены `utm_source=telegram&utm_medium=miniapp&utm_campaign=antitrevoga`
+и `utm_content=<экран>`, чтобы считать клиентов на стороне ПсиЧата.
 
 Источники техник: NHS Lothian «Coping with panic», NHS Inform «Grounding exercises», Mindwell Leeds «Practical strategies for managing anxiety», GAD-7 (Spitzer et al., 2006). Перед запуском контент должен проверить психолог.

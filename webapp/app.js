@@ -39,10 +39,29 @@
   };
 
   const today = () => new Date().toISOString().slice(0, 10);
+  // ---------- Аналитика (Яндекс Метрика). Передаются только события, без текстов дневника и ответов теста. ----------
+  const metrikaId = C.config.metrikaId;
+  if (metrikaId) {
+    (function (m, e, t, r, i, k, a) {
+      m[i] = m[i] || function () { (m[i].a = m[i].a || []).push(arguments); };
+      m[i].l = 1 * new Date();
+      k = e.createElement(t); a = e.getElementsByTagName(t)[0];
+      k.async = 1; k.src = r; a.parentNode.insertBefore(k, a);
+    })(window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+    window.ym(metrikaId, "init", { defer: true, clickmap: true, trackLinks: true, accurateTrackBounce: true });
+  }
+  function track(goal, params) {
+    try { if (metrikaId && window.ym) window.ym(metrikaId, "reachGoal", goal, params); } catch (e) { /* аналитика не должна ломать приложение */ }
+  }
+  function trackScreen(name) {
+    try { if (metrikaId && window.ym) window.ym(metrikaId, "hit", location.pathname + "#" + name, { title: name }); } catch (e) { /* то же */ }
+  }
+
   function logPractice(type) {
     const log = store.get("log", []);
     log.push({ d: today(), t: type });
     store.set("log", log);
+    track("practice_done", { type });
   }
   function streak() {
     const days = new Set(store.get("log", []).map((e) => e.d).concat(store.get("moods", []).map((m) => m.d)));
@@ -73,6 +92,13 @@
     a.target = "_blank";
     a.rel = "noopener";
     a.click();
+  }
+
+  // Главная цель приложения: переход в ПсиЧат. В ссылку добавляется экран, с которого человек ушёл.
+  function openPsychat() {
+    const from = (location.hash.slice(1) || "today").split("/")[0];
+    track("psychat_click", { from });
+    openExternal(C.config.psychatUrl + "&utm_content=" + encodeURIComponent(from));
   }
 
   function hasCrisisWords(text) {
@@ -115,7 +141,7 @@
 
   function bindClicks() {
     app.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => { haptic(); go(el.dataset.go); }));
-    app.querySelectorAll("[data-psy]").forEach((el) => el.addEventListener("click", () => { haptic("medium"); openExternal(C.config.psychatUrl); }));
+    app.querySelectorAll("[data-psy]").forEach((el) => el.addEventListener("click", () => { haptic("medium"); openPsychat(); }));
   }
 
   // ---------- Иконки (stroke, 24×24) ----------
@@ -282,7 +308,7 @@
           <p class="sub" style="margin-top:6px">Самопомощь снимает остроту, а психолог помогает понять причину. В ПсиЧате первая встреча 20 минут бесплатно и анонимно.</p>
           <button class="btn" style="margin-top:14px" data-psy>${C.psychologist.button}</button>
         </div>
-        <p class="muted">${C.disclaimer}</p>
+        <p class="muted">${C.disclaimer} <a href="privacy.html" style="color:inherit">Политика конфиденциальности</a></p>
       `);
       fillRings();
       app.querySelectorAll("[data-mood]").forEach((el) => el.addEventListener("click", () => {
@@ -290,13 +316,14 @@
         const list = store.get("moods", []).filter((m) => m.d !== today());
         list.push({ d: today(), v });
         store.set("moods", list);
+        track("mood_set", { mood: v });
         haptic("medium");
         app.querySelectorAll("[data-mood]").forEach((b) => b.classList.toggle("selected", b === el));
         if (gsap && !reduceMotion) gsap.fromTo(el.querySelector("svg"), { scale: 0.6, rotate: -15 }, { scale: 1, rotate: 0, duration: 0.6, ease: "back.out(3)" });
         const box = document.getElementById("mood-reply");
         box.innerHTML = moodReply(v);
         box.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
-        box.querySelectorAll("[data-psy]").forEach((b) => b.addEventListener("click", () => openExternal(C.config.psychatUrl)));
+        box.querySelectorAll("[data-psy]").forEach((b) => b.addEventListener("click", () => openPsychat()));
         if (gsap && !reduceMotion) gsap.from(box.children, { y: 8, opacity: 0, duration: 0.4 });
       }));
     },
@@ -715,6 +742,7 @@
       if (btn) btn.addEventListener("click", () => {
         if (!done.includes(n)) done.push(n);
         store.set("course_done", done);
+        track("course_day_done", { day: n });
         logPractice("course");
         celebrate();
         later(() => go("course"), 700);
@@ -731,7 +759,7 @@
           <div class="card"><div class="row"><span class="ico">${icon("swap", 26)}</span><span class="grow"><span class="title">Бесплатная замена</span><span class="sub">Если специалист не подойдёт, подберут другого</span></span></div></div>
         </div>
         <button class="btn" data-psy>${C.psychologist.button}</button>
-        <p class="muted">Откроется сайт ПсиЧата. Ответы теста и записи дневника никуда не передаются.</p>
+        <p class="muted">Откроется сайт ПсиЧата. Ответы теста и записи дневника никуда не передаются. <a href="privacy.html" style="color:inherit">Политика конфиденциальности</a></p>
       `);
     },
 
@@ -909,6 +937,7 @@
     const tests = store.get("tests", []);
     tests.push({ date: Date.now(), score });
     store.set("tests", tests);
+    track("test_done", { level: score >= 15 ? "severe" : score >= 10 ? "moderate" : score >= 5 ? "mild" : "minimal" });
     go("result");
   }
 
@@ -924,6 +953,9 @@
     clearTimers();
     let [name, arg] = (location.hash.slice(1) || "today").split("/");
     if (name === "home") name = "today";
+    trackScreen(name);
+    if (name === "sos") track("sos_open");
+    if (name === "crisis") track("crisis_open");
     const view = views[name] || views.today;
     const tabIndex = tabIds.indexOf(views[name] ? name : "today");
     const isTab = tabIndex >= 0;
