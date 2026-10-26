@@ -75,7 +75,7 @@
 html, body { min-height: 100%; }
 
 body {
-  margin: 0;
+  margin: 0; padding-top: var(--inset-top);
   background: var(--bg);
   color: var(--ink);
   font: 500 17px/1.5 var(--font-body);
@@ -89,14 +89,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 /* ---------- Верхняя панель: простая полоса ---------- */
+/* В полноэкранном режиме Telegram рисует свои кнопки поверх приложения и сообщает их высоту в --tg-content-safe-area-inset-top. */
+:root {
+  --inset-top: max(env(safe-area-inset-top, 0px), calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px)));
+  --inset-bottom: max(env(safe-area-inset-bottom, 0px), calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px)));
+}
 .topbar {
-  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  position: sticky; top: var(--inset-top); z-index: 20;
   display: flex; align-items: center; gap: 10px;
   padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
   background: var(--bg);
 }
 body::before {
-  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+  content: ""; position: fixed; inset: 0 0 auto; height: var(--inset-top);
   z-index: 21; background: var(--bg);
 }
 .back[hidden] { display: none; }
@@ -115,9 +120,9 @@ body::before {
 main {
   display: flex; flex-direction: column; gap: 16px;
   max-width: 560px; margin: 0 auto;
-  padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(var(--tabbar-h) + 40px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(var(--tabbar-h) + 40px + var(--inset-bottom)) max(16px, env(safe-area-inset-left, 0px));
 }
-body.no-tabs main { padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+body.no-tabs main { padding-bottom: calc(40px + var(--inset-bottom)); }
 .stack { display: flex; flex-direction: column; gap: 10px; }
 
 /* ---------- Типографика: крупное и мелкое, без промежуточного ---------- */
@@ -241,8 +246,8 @@ button.card.warm:hover { background: var(--soft-2); }
 .tabbar {
   position: fixed; z-index: 30; left: 0; right: 0; bottom: 0;
   display: grid; grid-template-columns: repeat(4, 1fr);
-  height: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
-  padding: 0 max(8px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(8px, env(safe-area-inset-left, 0px));
+  height: calc(var(--tabbar-h) + var(--inset-bottom));
+  padding: 0 max(8px, env(safe-area-inset-right, 0px)) var(--inset-bottom) max(8px, env(safe-area-inset-left, 0px));
   background: var(--surface);
 }
 .tabbar[hidden] { display: none; }
