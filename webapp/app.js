@@ -3,12 +3,25 @@
 
   const C = window.CONTENT;
   const tg = window.Telegram && window.Telegram.WebApp;
+  const inTelegram = !!(tg && tg.initData);
+  const gsap = window.gsap;
+  const confetti = window.confetti;
+  const reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   const app = document.getElementById("app");
   const backBtn = document.getElementById("back");
+  const tabbar = document.getElementById("tabbar");
 
-  if (tg && tg.initData !== undefined) {
+  // ---------- Telegram ----------
+  if (inTelegram) {
     tg.ready();
     tg.expand();
+    if (tg.colorScheme) document.documentElement.dataset.theme = tg.colorScheme;
+    try {
+      const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+      tg.setHeaderColor(bg);
+      tg.setBackgroundColor(bg);
+    } catch (e) { /* старые клиенты */ }
   }
 
   // ---------- Хранилище (только на устройстве пользователя) ----------
@@ -26,13 +39,35 @@
     },
   };
 
+  const today = () => new Date().toISOString().slice(0, 10);
+  function logPractice(type) {
+    const log = store.get("log", []);
+    log.push({ d: today(), t: type });
+    store.set("log", log);
+  }
+  function streak() {
+    const days = new Set(store.get("log", []).map((e) => e.d).concat(store.get("moods", []).map((m) => m.d)));
+    let n = 0;
+    const d = new Date();
+    if (!days.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 1);
+    while (days.has(d.toISOString().slice(0, 10))) { n++; d.setDate(d.getDate() - 1); }
+    return n;
+  }
+
   // ---------- Утилиты ----------
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const haptic = (type) => { try { tg && tg.HapticFeedback.impactOccurred(type || "light"); } catch (e) { /* вне Telegram */ } };
+  const haptic = (type) => { try { inTelegram && tg.HapticFeedback.impactOccurred(type || "light"); } catch (e) { /* вне Telegram */ } };
+  const hapticOk = () => { try { inTelegram && tg.HapticFeedback.notificationOccurred("success"); } catch (e) { /* вне Telegram */ } };
   const go = (route) => { location.hash = route; };
+  const plural = (n, one, few, many) => {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  };
 
   function openExternal(url) {
-    if (tg && tg.openLink && tg.initData) return tg.openLink(url);
+    if (inTelegram && tg.openLink) return tg.openLink(url);
     const a = document.createElement("a");
     a.href = url;
     a.target = "_blank";
@@ -45,105 +80,369 @@
     return C.crisis.triggers.some((w) => t.includes(w));
   }
 
+  function celebrate() {
+    hapticOk();
+    if (!confetti || reduceMotion) return;
+    const colors = ["#2f7d6b", "#6cc5ae", "#f4b48a", "#ffd9bd", "#a6d2c6"];
+    confetti({ particleCount: 90, spread: 75, origin: { y: 0.7 }, colors, scalar: 0.9, ticks: 160 });
+  }
+
   // Таймеры текущего экрана останавливаются при переходе на другой.
   let timers = [];
   const later = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
   const every = (fn, ms) => { const id = setInterval(fn, ms); timers.push(id); return id; };
   const clearTimers = () => { timers.forEach((id) => { clearTimeout(id); clearInterval(id); }); timers = []; };
 
-  function render(html) {
+  function animateIn(root) {
+    if (!gsap || reduceMotion) return;
+    gsap.from(root.children, { y: 18, opacity: 0, duration: 0.5, stagger: 0.045, ease: "power3.out", clearProps: "transform,opacity" });
+  }
+
+  function countUp(el, to, suffix) {
+    if (!el) return;
+    if (!gsap || reduceMotion) { el.textContent = to + (suffix || ""); return; }
+    const obj = { v: 0 };
+    gsap.to(obj, { v: to, duration: 1, ease: "power2.out", onUpdate: () => { el.textContent = Math.round(obj.v) + (suffix || ""); } });
+  }
+
+  function render(html, opts) {
     app.innerHTML = html;
     window.scrollTo(0, 0);
     bindClicks();
+    if (!opts || opts.animate !== false) animateIn(app);
   }
 
   function bindClicks() {
     app.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => { haptic(); go(el.dataset.go); }));
-    app.querySelectorAll("[data-psy]").forEach((el) => el.addEventListener("click", () => openExternal(C.config.psychatUrl)));
+    app.querySelectorAll("[data-psy]").forEach((el) => el.addEventListener("click", () => { haptic("medium"); openExternal(C.config.psychatUrl); }));
+  }
+
+  // ---------- Иконки (stroke, 24×24) ----------
+  const ICONS = {
+    breathing: '<path d="M3 8h10a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h6"/>',
+    grounding: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    pmr: '<path d="M22 12h-4l-3 8L9 4l-3 8H2"/>',
+    diary: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/><path d="M9 8h6"/>',
+    worry: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/><path d="M9 2h6"/>',
+    steps: '<path d="M3 20h5v-5h5v-5h5V5h3"/>',
+    distortions: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V16h8v-1.3A7 7 0 0 0 12 2z"/>',
+    test: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2h6v4H9z"/><path d="M9 13l2 2 4-4"/>',
+    today: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/>',
+    practices: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>',
+    course: '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h7"/>',
+    progress: '<path d="M3 20h18"/><path d="M6 16v-5"/><path d="M11 16V6"/><path d="M16 16v-8"/>',
+    chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01"/>',
+    heart: '<path d="M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z"/>',
+    shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+    swap: '<path d="M7 7h12l-3-3"/><path d="M17 17H5l3 3"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+    back: '<path d="M15 5l-7 7 7 7"/>',
+    next: '<path d="M9 5l7 7-7 7"/>',
+    play: '<path d="M7 4l13 8-13 8z"/>',
+    flame: '<path d="M12 22c4 0 7-2.7 7-6.5 0-4-3-6-4-9.5-1.5 2-2 3.5-2 5-1.5-1-2.5-3-2.5-5C7 8 5 11.5 5 15.5 5 19.3 8 22 12 22z"/>',
+  };
+  const icon = (name, size) =>
+    `<svg width="${size || 22}" height="${size || 22}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
+  backBtn.innerHTML = icon("back", 20);
+
+  // ---------- Настроение ----------
+  const MOODS = [
+    { name: "Ужасно", color: "#e99a86", mouth: -5 },
+    { name: "Плохо", color: "#f2bf95", mouth: -2.5 },
+    { name: "Так себе", color: "#ecd9a2", mouth: 0 },
+    { name: "Хорошо", color: "#b5dcc6", mouth: 3 },
+    { name: "Отлично", color: "#86cdb5", mouth: 5.5 },
+  ];
+  function moodFace(i) {
+    const m = MOODS[i];
+    const y = 23;
+    return `<svg viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="18" fill="${m.color}"/>
+      <circle cx="14" cy="16" r="2.2" fill="#2b2b2b"/><circle cx="26" cy="16" r="2.2" fill="#2b2b2b"/>
+      <path d="M13 ${y + (m.mouth < 0 ? 2 : 0)} Q20 ${y + m.mouth + (m.mouth < 0 ? 2 : 0)} 27 ${y + (m.mouth < 0 ? 2 : 0)}" stroke="#2b2b2b" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    </svg>`;
+  }
+  const MOOD_REPLIES = [
+    ["Сочувствуем. Давайте попробуем снизить напряжение прямо сейчас — 3 минуты дыхания правда помогают.", "sos", "Помочь сейчас"],
+    ["Бывают такие дни. Небольшая практика поможет телу немного отпустить.", "breathing", "Подышать 3 минуты"],
+    ["Хороший момент позаботиться о себе, пока тревога не выросла.", "course", "К курсу"],
+    ["Здорово! Закрепим: пара минут практики сегодня сделает навык крепче.", "practices", "Выбрать практику"],
+    ["Отлично! Запомните это состояние — к нему можно возвращаться.", "progress", "Мой прогресс"],
+  ];
+
+  // ---------- Общие блоки ----------
+  function ringSvg(value, total, cls) {
+    const r = 26, c = 2 * Math.PI * r;
+    const off = c * (1 - (total ? value / total : 0));
+    return `<div class="ring ${cls || ""}">
+      <svg viewBox="0 0 64 64"><circle class="track" cx="32" cy="32" r="${r}" fill="none" stroke-width="6"/>
+      <circle class="bar" cx="32" cy="32" r="${r}" fill="none" stroke-width="6" stroke-dasharray="${c}" stroke-dashoffset="${c}" data-off="${off}"/></svg>
+      <span class="label">${value}/${total}</span></div>`;
+  }
+  function fillRings() {
+    // Сначала кольцо рисуется пустым, затем заполняется — так видна анимация.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      app.querySelectorAll(".ring .bar").forEach((b) => { b.style.strokeDashoffset = b.dataset.off; });
+    }));
   }
 
   const psychologistCard = () => `
-    <button class="card" data-go="psychologist">
-      <span class="title">Поговорить с психологом</span>
-      <span class="sub">Первая встреча 20 минут бесплатно</span>
+    <button class="card warm-card" data-go="psychologist">
+      <div class="row">
+        <span class="icon-chip warm">${icon("chat", 24)}</span>
+        <span class="grow"><span class="title">Поговорить с психологом</span><span class="sub">Первая встреча 20 минут бесплатно</span></span>
+        <span class="chev">${icon("next", 18)}</span>
+      </div>
     </button>`;
+
+  const techniqueTile = (t) => `
+    <button class="tile" data-go="${t.tool && t.id !== "steps" ? t.tool : "technique/" + t.id}">
+      <span class="icon-chip">${icon(t.id, 22)}</span>
+      <span class="title">${t.title}</span>
+      <span class="sub">${t.duration}</span>
+    </button>`;
+
+  function greeting() {
+    const h = new Date().getHours();
+    if (h < 5) return "Доброй ночи";
+    if (h < 12) return "Доброе утро";
+    if (h < 18) return "Добрый день";
+    return "Добрый вечер";
+  }
+
+  function courseState() {
+    const done = store.get("course_done", []);
+    let next = 1;
+    while (done.includes(next) && next <= C.course.length) next++;
+    return { done, next: Math.min(next, C.course.length), finished: done.length >= C.course.length };
+  }
 
   // ---------- Экраны ----------
   const views = {
-    home() {
-      const done = store.get("course_done", []);
+    today() {
+      const cs = courseState();
       const tests = store.get("tests", []);
       const last = tests[tests.length - 1];
+      const moods = store.get("moods", []);
+      const todayMood = moods.find((m) => m.d === today());
+      const dayTitle = C.course[cs.next - 1].title;
       render(`
-        <h1>Как вы сейчас?</h1>
-        <button class="card sos" data-go="sos">
-          <span class="title">Мне тревожно прямо сейчас</span>
-          <span class="sub">Помощь за 3 минуты</span>
+        <div>
+          <div class="eyebrow">${new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}</div>
+          <h1>${greeting()}</h1>
+        </div>
+
+        <div class="card">
+          <span class="title">Как вы сейчас?</span>
+          <div class="moods">
+            ${MOODS.map((m, i) => `<button class="mood ${todayMood && todayMood.v === i ? "selected" : ""}" data-mood="${i}" aria-label="${m.name}">${moodFace(i)}${m.name}</button>`).join("")}
+          </div>
+          <div id="mood-reply">${todayMood ? moodReply(todayMood.v) : ""}</div>
+        </div>
+
+        <button class="hero" data-go="sos">
+          <i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i>
+          <span class="hero-title">Мне тревожно прямо сейчас</span>
+          <span class="hero-sub">Дыхание и заземление — станет легче за 3 минуты</span>
+          <span class="pill">${icon("play", 14)} Начать</span>
+          <i class="mini-orb"></i>
         </button>
-        <button class="card" data-go="course">
-          <span class="title">Курс «14 дней спокойнее»</span>
-          <span class="sub">${done.length ? `Пройдено дней: ${done.length} из ${C.course.length}` : "10 минут в день, техники КПТ"}</span>
+
+        <button class="card" data-go="${cs.finished ? "course" : "day/" + cs.next}">
+          <div class="row">
+            ${ringSvg(cs.done.length, C.course.length)}
+            <span class="grow">
+              <span class="eyebrow">${cs.finished ? "Курс пройден" : "Курс · день " + cs.next}</span>
+              <span class="title">${cs.finished ? "14 дней спокойнее" : dayTitle}</span>
+              <span class="sub">${cs.done.length ? "Продолжить" : "10 минут в день по методам КПТ"}</span>
+            </span>
+            <span class="chev">${icon("next", 18)}</span>
+          </div>
         </button>
+
+        <div>
+          <h2>Быстрые практики</h2>
+          <div class="rail">${C.techniques.map(techniqueTile).join("")}</div>
+        </div>
+
         <button class="card" data-go="test">
-          <span class="title">Тест на тревожность</span>
-          <span class="sub">${last ? `Последний результат: ${last.score} из 21` : "7 вопросов, 2 минуты"}</span>
+          <div class="row">
+            <span class="icon-chip">${icon("test", 24)}</span>
+            <span class="grow"><span class="title">Тест на тревожность</span>
+            <span class="sub">${last ? `Последний результат: ${last.score} из 21` : "7 вопросов · 2 минуты"}</span></span>
+            <span class="chev">${icon("next", 18)}</span>
+          </div>
         </button>
-        <h2>Техники</h2>
-        ${C.techniques.map((t) => `
-          <button class="card" data-go="technique/${t.id}">
-            <span class="title">${t.title}</span>
-            <span class="sub">${t.short}</span>
-          </button>`).join("")}
-        <h2>Поддержка</h2>
+
         ${psychologistCard()}
         <p class="muted">${C.disclaimer}</p>
       `);
+      fillRings();
+      app.querySelectorAll("[data-mood]").forEach((el) => el.addEventListener("click", () => {
+        const v = Number(el.dataset.mood);
+        const list = store.get("moods", []).filter((m) => m.d !== today());
+        list.push({ d: today(), v });
+        store.set("moods", list);
+        haptic("medium");
+        app.querySelectorAll("[data-mood]").forEach((b) => b.classList.toggle("selected", b === el));
+        if (gsap && !reduceMotion) gsap.fromTo(el.querySelector("svg"), { scale: 0.6, rotate: -15 }, { scale: 1, rotate: 0, duration: 0.6, ease: "back.out(3)" });
+        const box = document.getElementById("mood-reply");
+        box.innerHTML = moodReply(v);
+        box.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
+        if (gsap && !reduceMotion) gsap.from(box.children, { y: 8, opacity: 0, duration: 0.4 });
+      }));
+    },
+
+    practices() {
+      render(`
+        <h1>Практики</h1>
+        <p class="muted">Короткие упражнения из когнитивно-поведенческой терапии. Лучше всего работают, если делать их регулярно, а не только в трудный момент.</p>
+        <div class="grid2">
+          ${C.techniques.map(techniqueTile).join("")}
+          <button class="tile" data-go="distortions">
+            <span class="icon-chip warm">${icon("distortions", 22)}</span>
+            <span class="title">Ловушки мышления</span><span class="sub">Справочник</span>
+          </button>
+          <button class="tile" data-go="test">
+            <span class="icon-chip warm">${icon("test", 22)}</span>
+            <span class="title">Тест GAD-7</span><span class="sub">2 мин</span>
+          </button>
+        </div>
+        <h2>Как это работает</h2>
+        ${C.techniques.map((t) => `
+          <button class="card" data-go="technique/${t.id}">
+            <div class="row"><span class="grow"><span class="title">${t.title}</span><span class="sub">${t.short}</span></span><span class="chev">${icon("next", 18)}</span></div>
+          </button>`).join("")}
+      `);
+    },
+
+    course() {
+      const cs = courseState();
+      const paidFrom = C.config.paidFromDay;
+      render(`
+        <h1>14 дней спокойнее</h1>
+        <div class="card">
+          <div class="row">
+            ${ringSvg(cs.done.length, C.course.length, "big")}
+            <span class="grow">
+              <span class="title">${cs.finished ? "Курс пройден!" : cs.done.length ? "Вы на пути" : "Начнём?"}</span>
+              <span class="sub">Каждый день — немного теории и одна практика, около 10 минут.</span>
+            </span>
+          </div>
+          ${cs.finished ? "" : `<button class="btn" style="margin-top:16px" data-go="day/${cs.next}">${cs.done.length ? "Продолжить: день " + cs.next : "Начать первый день"}</button>`}
+        </div>
+        <div class="path">
+          ${C.course.map((d, i) => {
+            const n = i + 1;
+            const isDone = cs.done.includes(n);
+            const isCurrent = !isDone && n === cs.next;
+            const open = isDone || isCurrent;
+            const paid = paidFrom && n >= paidFrom;
+            return `
+              <button class="card node ${isDone ? "done" : ""} ${isCurrent ? "current" : ""} ${open ? "" : "locked"}" ${open ? `data-go="day/${n}"` : "disabled"}>
+                <span class="num">${isDone ? "✓" : n}</span>
+                <span class="grow"><span class="title">${d.title}</span>${paid ? `<span class="sub">Платный день</span>` : `<span class="sub">День ${n}</span>`}</span>
+              </button>`;
+          }).join("")}
+        </div>
+        ${psychologistCard()}
+      `);
+      fillRings();
+    },
+
+    progress() {
+      const log = store.get("log", []);
+      const moods = store.get("moods", []).slice(-14);
+      const tests = store.get("tests", []).slice(-8);
+      const cs = courseState();
+      render(`
+        <h1>Мой прогресс</h1>
+        <div class="stats">
+          <div class="card stat"><b id="st-streak">0</b><span>${icon("flame", 14)} ${plural(streak(), "день", "дня", "дней")} подряд</span></div>
+          <div class="card stat"><b id="st-prac">0</b><span>практик</span></div>
+          <div class="card stat"><b id="st-course">0</b><span>дней курса</span></div>
+        </div>
+        <h2>Настроение</h2>
+        <div class="card">${moods.length >= 2 ? moodChart(moods) : `<p class="muted" style="margin:0">Отмечайте настроение на главном экране — здесь появится график за 2 недели.</p>`}</div>
+        <h2>Уровень тревоги (GAD-7)</h2>
+        <div class="card">${tests.length ? testChart(tests) : `<p class="muted" style="margin:0">Пройдите тест, чтобы видеть, как меняется тревога. Повторяйте раз в 2 недели.</p>`}
+          <button class="btn secondary" style="margin-top:14px" data-go="test">${tests.length ? "Пройти ещё раз" : "Пройти тест"}</button>
+        </div>
+        <p class="muted" style="margin-top:16px">Все данные хранятся только на вашем телефоне.</p>
+      `);
+      countUp(document.getElementById("st-streak"), streak());
+      countUp(document.getElementById("st-prac"), log.length);
+      countUp(document.getElementById("st-course"), cs.done.length);
+      if (gsap && !reduceMotion) {
+        const line = app.querySelector(".chart .line");
+        if (line) {
+          const len = line.getTotalLength();
+          gsap.fromTo(line, { strokeDasharray: len, strokeDashoffset: len }, { strokeDashoffset: 0, duration: 1.2, ease: "power2.out" });
+        }
+        gsap.from(app.querySelectorAll(".chart .bar"), { scaleY: 0, transformOrigin: "50% 100%", duration: 0.7, stagger: 0.06, ease: "back.out(1.6)" });
+      }
     },
 
     sos() {
+      const mode = C.breathing.find((b) => b.id === "panic");
       const statements = C.sos.statements;
       render(`
         <h1>${C.sos.title}</h1>
         <p>${C.sos.intro}</p>
-        <div class="notice" id="statement">${statements[0]}</div>
-        <h2>Шаг 1. Подышите вместе с кругом</h2>
-        ${breathingWidget(C.breathing.find((b) => b.id === "panic"), 120)}
+        <div class="notice" id="statement"><b>${statements[0]}</b></div>
+        <h2>Шаг 1. Дышите вместе со сферой</h2>
+        ${orbWidget()}
         <h2>Шаг 2. Вернитесь в «здесь и сейчас»</h2>
-        <button class="btn secondary" data-go="grounding">Заземление 5-4-3-2-1</button>
+        <button class="card" data-go="grounding"><div class="row"><span class="icon-chip">${icon("grounding")}</span><span class="grow"><span class="title">Заземление 5-4-3-2-1</span><span class="sub">2 минуты</span></span><span class="chev">${icon("next", 18)}</span></div></button>
         <h2>Стало легче?</h2>
         <div class="grid2">
-          <button class="card" data-go="home"><span class="title">Да, спасибо</span></button>
-          <button class="card" data-go="sos-worse"><span class="title">Нет, всё ещё плохо</span></button>
+          <button class="btn" data-go="sos-better">Да, спасибо</button>
+          <button class="btn secondary" data-go="sos-worse" style="margin-top:0">Всё ещё плохо</button>
         </div>
       `);
       let i = 0;
       every(() => {
         i = (i + 1) % statements.length;
         const el = document.getElementById("statement");
-        if (el) el.textContent = statements[i];
+        if (!el) return;
+        if (gsap && !reduceMotion) {
+          gsap.to(el, { opacity: 0, y: -6, duration: 0.3, onComplete: () => { el.innerHTML = `<b>${statements[i]}</b>`; gsap.fromTo(el, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.4 }); } });
+        } else el.innerHTML = `<b>${statements[i]}</b>`;
       }, 8000);
-      startBreathing(C.breathing.find((b) => b.id === "panic"), 120);
+      startBreathing(mode, 120);
+    },
+
+    "sos-better"() {
+      logPractice("sos");
+      render(`
+        <div class="step-num">✓</div>
+        <h1 class="center">Вы справились</h1>
+        <p class="center muted">Вы только что сами помогли себе выйти из тревоги. Чем чаще тренировать эти навыки в спокойном состоянии, тем быстрее они срабатывают в трудный момент.</p>
+        <button class="btn" data-go="course">Тренироваться в курсе</button>
+        <button class="btn secondary" data-go="today">На главную</button>
+      `);
+      celebrate();
     },
 
     "sos-worse"() {
       render(`
         <h1>Вы не одни с этим</h1>
-        <p>Если тревога не отпускает или такие состояния повторяются, это важный сигнал, что с этим лучше работать вместе со специалистом.</p>
-        <button class="btn" data-psy>${C.psychologist.button}</button>
+        <p>Если тревога не отпускает или такие состояния повторяются, это важный сигнал: с этим лучше работать вместе со специалистом.</p>
+        ${psychologistCard()}
         <button class="btn secondary" data-go="breathing">Ещё подышать</button>
-        <div class="notice danger-box" style="margin-top:20px">
-          Если есть мысли причинить себе вред — <a href="#crisis">откройте экран экстренной помощи</a>.
-        </div>
+        <div class="notice danger">Если есть мысли причинить себе вред — <a href="#crisis" style="color:var(--danger);font-weight:700">откройте экран экстренной помощи</a>.</div>
       `);
     },
 
     technique(id) {
       const t = C.techniques.find((x) => x.id === id);
-      if (!t) return go("home");
+      if (!t) return go("today");
       render(`
-        <h1>${t.title}</h1>
-        <p>${t.body}</p>
-        ${t.tool ? `<button class="btn" data-go="${t.tool}">Начать</button>` : ""}
+        <span class="icon-chip" style="width:64px;height:64px;border-radius:22px">${icon(t.id, 30)}</span>
+        <div><div class="eyebrow">${t.duration}</div><h1>${t.title}</h1></div>
+        <p class="lead">${t.body}</p>
+        ${t.tool && t.id !== "steps" ? `<button class="btn" data-go="${t.tool}">${icon("play", 16)} Начать</button>` : ""}
         ${t.id === "steps" ? stepsForm() : ""}
       `);
       if (t.id === "steps") bindSteps();
@@ -158,14 +457,15 @@
           ${C.breathing.map((b) => `<button class="chip ${b.id === mode.id ? "selected" : ""}" data-mode="${b.id}">${b.name}</button>`).join("")}
         </div>
         <p class="muted">${mode.hint}</p>
-        ${breathingWidget(mode, 180)}
+        ${orbWidget()}
       `);
       app.querySelectorAll("[data-mode]").forEach((el) => el.addEventListener("click", () => {
         store.set("breath_mode", el.dataset.mode);
+        haptic();
         clearTimers();
         views.breathing();
       }));
-      startBreathing(mode, 180);
+      startBreathing(mode, 180, () => logPractice("breathing"));
     },
 
     grounding() {
@@ -173,23 +473,27 @@
       const steps = C.grounding;
       const draw = () => {
         if (step >= steps.length) {
+          logPractice("grounding");
           render(`
-            <h1>Отлично</h1>
-            <p>Вы вернули внимание в настоящий момент. Оцените, как вы сейчас.</p>
-            <button class="btn" data-go="home">На главную</button>
+            <div class="step-num">✓</div>
+            <h1 class="center">Вы здесь и сейчас</h1>
+            <p class="center muted">Внимание вернулось в настоящий момент. Прислушайтесь: как вы себя чувствуете?</p>
+            <button class="btn" data-go="today">На главную</button>
             <button class="btn secondary" data-go="breathing">Подышать ещё</button>
           `);
-          return;
+          return celebrate();
         }
         const s = steps[step];
         render(`
-          <div class="progress"><i style="width:${(step / steps.length) * 100}%"></i></div>
-          <div class="big-number">${s.n}</div>
-          <p style="text-align:center">${s.prompt}</p>
-          <p class="muted" style="text-align:center">Назовите про себя или вслух, не торопитесь.</p>
+          <div class="dots">${steps.map((_, i) => `<i class="${i <= step ? "on" : ""}"></i>`).join("")}</div>
+          <div class="step-num" id="gnum">${s.n}</div>
+          <h1 class="center">${s.sense[0].toUpperCase() + s.sense.slice(1)}</h1>
+          <p class="center lead">${s.prompt}</p>
+          <p class="muted center">Назовите про себя или вслух, не торопитесь.</p>
           <button class="btn" id="next">Готово</button>
         `);
-        document.getElementById("next").addEventListener("click", () => { haptic(); step++; draw(); });
+        if (gsap && !reduceMotion) gsap.from("#gnum", { scale: 0.4, opacity: 0, duration: 0.6, ease: "back.out(2.2)" });
+        document.getElementById("next").addEventListener("click", () => { haptic("medium"); step++; draw(); });
       };
       draw();
     },
@@ -199,30 +503,36 @@
       const groups = C.pmr;
       const run = () => {
         if (i >= groups.length) {
+          logPractice("pmr");
           render(`
-            <h1>Готово</h1>
-            <p>Побудьте ещё минуту в расслаблении. Заметьте, как ощущается тело сейчас по сравнению с началом.</p>
-            <button class="btn" data-go="home">На главную</button>
+            <div class="step-num">✓</div>
+            <h1 class="center">Тело отпустило</h1>
+            <p class="center muted">Побудьте ещё минуту в расслаблении. Заметьте, как ощущается тело сейчас по сравнению с началом.</p>
+            <button class="btn" data-go="today">На главную</button>
           `);
-          return;
+          return celebrate();
         }
         const [name, action] = groups[i];
         render(`
-          <div class="progress"><i style="width:${(i / groups.length) * 100}%"></i></div>
-          <h1>${name}</h1>
-          <p id="pmr-text">${action} и удерживайте напряжение…</p>
-          <div class="big-number" id="pmr-count">5</div>
+          <div class="dots">${groups.map((_, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</div>
+          <div class="eyebrow center">Группа ${i + 1} из ${groups.length}</div>
+          <h1 class="center">${name}</h1>
+          <p class="center lead" id="pmr-text">${action} и удерживайте напряжение…</p>
+          <div class="count" id="pmr-count">5</div>
         `);
         countdown(5, "pmr-count", () => {
-          haptic("medium");
-          document.getElementById("pmr-text").textContent = "Резко отпустите. Почувствуйте, как уходит напряжение…";
+          haptic("heavy");
+          const t = document.getElementById("pmr-text");
+          t.textContent = "Резко отпустите. Почувствуйте, как уходит напряжение…";
+          if (gsap && !reduceMotion) gsap.from(t, { opacity: 0, duration: 0.5 });
           countdown(10, "pmr-count", () => { i++; run(); });
         });
       };
       render(`
+        <span class="icon-chip" style="width:64px;height:64px;border-radius:22px">${icon("pmr", 30)}</span>
         <h1>Мышечная релаксация</h1>
-        <p>Сядьте или лягте удобно. Мы пройдём ${groups.length} групп мышц: напрягаем 5 секунд, расслабляем 10. Напрягайте мышцы не до боли.</p>
-        <button class="btn" id="start">Начать</button>
+        <p class="lead">Сядьте или лягте удобно. Мы пройдём ${groups.length} групп мышц: напрягаем 5 секунд, расслабляем 10. Напрягайте мышцы не до боли.</p>
+        <button class="btn" id="start">${icon("play", 16)} Начать</button>
       `);
       document.getElementById("start").addEventListener("click", run);
     },
@@ -232,28 +542,28 @@
       render(`
         <h1>Дневник мыслей</h1>
         <form id="diary-form">
-          <label>Ситуация. Что произошло?</label>
-          <textarea name="situation" required></textarea>
-          <label>Тревожная мысль. Что пронеслось в голове?</label>
-          <textarea name="thought" required></textarea>
-          <label>Насколько сильна тревога: <b id="lvl">5</b> из 10</label>
-          <input type="range" name="level" min="0" max="10" value="5">
-          <label>Взвешенная мысль. Как ещё можно на это посмотреть? Что бы вы сказали другу?</label>
-          <textarea name="alternative"></textarea>
-          <button class="btn" type="submit">Сохранить</button>
+          <label for="d-situation">Ситуация. Что произошло?</label>
+          <textarea id="d-situation" name="situation" placeholder="Например: начальник попросил зайти после обеда" required></textarea>
+          <label for="d-thought">Тревожная мысль. Что пронеслось в голове?</label>
+          <textarea id="d-thought" name="thought" placeholder="Например: меня уволят" required></textarea>
+          <label for="d-level">Насколько сильна тревога: <span id="lvl">5</span> из 10</label>
+          <input id="d-level" type="range" name="level" min="0" max="10" value="5">
+          <label for="d-alt">Взвешенная мысль. Как ещё можно на это посмотреть?</label>
+          <textarea id="d-alt" name="alternative" placeholder="Что бы вы сказали другу с такой мыслью?"></textarea>
+          <button class="btn" type="submit">Сохранить запись</button>
         </form>
-        <button class="btn secondary" data-go="distortions">Подсказка: ловушки мышления</button>
+        <button class="btn secondary" data-go="distortions">${icon("distortions", 18)} Подсказка: ловушки мышления</button>
         ${entries.length ? `<h2>Прошлые записи</h2>` : ""}
         ${entries.slice().reverse().map((e) => `
-          <div class="card">
-            <span class="sub">${new Date(e.date).toLocaleDateString("ru-RU")} · тревога ${e.level}/10</span>
+          <div class="card entry">
+            <span class="eyebrow">${new Date(e.date).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })} · тревога ${e.level}/10</span>
             <span class="title">${esc(e.thought)}</span>
             ${e.alternative ? `<span class="sub">→ ${esc(e.alternative)}</span>` : ""}
           </div>`).join("")}
         <p class="muted">Записи хранятся только на вашем устройстве.</p>
       `);
       const form = document.getElementById("diary-form");
-      form.level.addEventListener("input", () => { document.getElementById("lvl").textContent = form.level.value; });
+      form.level.addEventListener("input", () => { document.getElementById("lvl").textContent = form.level.value; haptic(); });
       form.addEventListener("submit", (ev) => {
         ev.preventDefault();
         const entry = {
@@ -265,8 +575,9 @@
         };
         entries.push(entry);
         store.set("diary", entries);
-        haptic("medium");
+        logPractice("diary");
         if (hasCrisisWords(entry.situation + " " + entry.thought + " " + entry.alternative)) return go("crisis");
+        hapticOk();
         views.diary();
       });
     },
@@ -274,7 +585,7 @@
     distortions() {
       render(`
         <h1>Ловушки мышления</h1>
-        <p>Тревожный мозг часто ошибается одинаково. Узнали свою мысль? Уже хорошо: значит, это не факт, а привычка ума.</p>
+        <p class="lead">Тревожный мозг часто ошибается одинаково. Узнали свою мысль? Это хорошо: значит, это не факт, а привычка ума.</p>
         ${C.distortions.map(([name, ex]) => `<div class="card"><span class="title">${name}</span><span class="sub">${ex}</span></div>`).join("")}
         <button class="btn" data-go="diary">К дневнику</button>
       `);
@@ -286,15 +597,17 @@
         <h1>Время для беспокойства</h1>
         <p class="muted">Запишите мысль и отложите её до своего времени.</p>
         <form id="worry-form">
-          <input type="text" name="w" placeholder="Что тревожит?" required>
+          <input id="w-text" type="text" name="w" placeholder="Что тревожит?" required>
           <button class="btn" type="submit">Отложить на потом</button>
         </form>
         ${list.length ? `<h2>Отложенные мысли</h2>` + list.map((w) => `<div class="card">${esc(w)}</div>`).join("") : ""}
         <h2>Моё время</h2>
-        <p class="muted">Когда наступит ваше время, включите таймер на 15 минут и перечитайте список.</p>
-        <div class="big-number" id="worry-count">15:00</div>
-        <button class="btn secondary" id="worry-start">Начать 15 минут</button>
-        ${list.length ? `<button class="btn secondary" id="worry-clear">Время вышло, очистить список</button>` : ""}
+        <div class="card">
+          <p class="muted">Когда наступит ваше время, включите таймер и перечитайте список. Часть мыслей уже потеряет силу.</p>
+          <div class="count" id="worry-count">15:00</div>
+          <button class="btn secondary" id="worry-start">${icon("clock", 18)} Начать 15 минут</button>
+          ${list.length ? `<button class="btn secondary" id="worry-clear">Время вышло, очистить список</button>` : ""}
+        </div>
       `);
       document.getElementById("worry-form").addEventListener("submit", (ev) => {
         ev.preventDefault();
@@ -303,9 +616,13 @@
         list.push(v);
         store.set("worries", list);
         if (hasCrisisWords(v)) return go("crisis");
+        haptic("medium");
         views.worry();
       });
-      document.getElementById("worry-start").addEventListener("click", () => countdown(15 * 60, "worry-count", () => haptic("heavy"), true));
+      document.getElementById("worry-start").addEventListener("click", () => {
+        logPractice("worry");
+        countdown(15 * 60, "worry-count", () => hapticOk(), true);
+      });
       const clear = document.getElementById("worry-clear");
       if (clear) clear.addEventListener("click", () => { store.set("worries", []); views.worry(); });
     },
@@ -314,19 +631,23 @@
 
     test() {
       const answers = [];
+      const n = C.gad7.items.length;
       const ask = (i) => {
-        if (i >= C.gad7.items.length) return finishTest(answers);
+        if (i >= n) return finishTest(answers);
         render(`
-          <div class="progress"><i style="width:${(i / C.gad7.items.length) * 100}%"></i></div>
-          <p class="muted">${C.gad7.question}</p>
+          <div class="dots">${C.gad7.items.map((_, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</div>
+          <div class="eyebrow">Вопрос ${i + 1} из ${n}</div>
+          <p class="muted" style="margin-top:4px">${C.gad7.question}</p>
           <h1>${C.gad7.items[i]}</h1>
-          ${C.gad7.options.map((o, v) => `<button class="option" data-v="${v}">${o}</button>`).join("")}
+          <div class="stack" style="margin-top:16px">
+            ${C.gad7.options.map((o, v) => `<button class="option" data-v="${v}"><span class="dot"></span>${o}</button>`).join("")}
+          </div>
         `);
         app.querySelectorAll("[data-v]").forEach((el) => el.addEventListener("click", () => {
           haptic();
           el.classList.add("selected");
           answers[i] = Number(el.dataset.v);
-          later(() => ask(i + 1), 180);
+          later(() => ask(i + 1), 260);
         }));
       };
       ask(0);
@@ -338,42 +659,32 @@
       if (!last) return go("test");
       const level = C.gad7.levels.find((l) => last.score <= l.max);
       const prev = tests[tests.length - 2];
+      const arc = Math.PI * 100;
       render(`
-        <h1>Ваш результат</h1>
-        <div class="big-number">${last.score}<span class="muted" style="font-size:20px"> / 21</span></div>
-        <h2 style="text-align:center;margin-top:0">${level.name}</h2>
-        ${prev ? `<p class="muted" style="text-align:center">В прошлый раз: ${prev.score}</p>` : ""}
-        <p>${level.text}</p>
+        <h1 class="center">Ваш результат</h1>
+        <svg class="gauge" viewBox="0 0 240 135" aria-hidden="true">
+          <defs><linearGradient id="gaugeGrad" x1="0" x2="1"><stop offset="0" stop-color="#6cc5ae"/><stop offset=".55" stop-color="#f4b48a"/><stop offset="1" stop-color="#e0705a"/></linearGradient></defs>
+          <path class="track" d="M20 120 A100 100 0 0 1 220 120" fill="none" stroke-width="16" stroke-linecap="round"/>
+          <path class="bar" id="gbar" d="M20 120 A100 100 0 0 1 220 120" fill="none" stroke-width="16" stroke-dasharray="${arc}" stroke-dashoffset="${arc}"/>
+        </svg>
+        <div class="score"><span id="score">0</span><small> / 21</small></div>
+        <h2 class="center" style="margin-top:14px">${level.name}</h2>
+        ${prev ? `<p class="muted center">В прошлый раз: ${prev.score} ${prev.score > last.score ? "— стало лучше" : ""}</p>` : ""}
+        <p class="lead">${level.text}</p>
         ${level.recommendPsychologist ? `
-          <div class="notice">${C.psychologist.text}</div>
-          <button class="btn" data-psy>${C.psychologist.button}</button>
+          <div class="card warm-card"><p style="margin:0">${C.psychologist.text}</p></div>
+          <button class="btn warm" data-psy>${C.psychologist.button}</button>
           <button class="btn secondary" data-go="course">Начать курс самопомощи</button>
         ` : `
           <button class="btn" data-go="course">Начать курс «14 дней спокойнее»</button>
         `}
         <p class="muted" style="margin-top:16px">${C.gad7.note}</p>
       `);
-    },
-
-    course() {
-      const done = store.get("course_done", []);
-      const paidFrom = C.config.paidFromDay;
-      render(`
-        <h1>14 дней спокойнее</h1>
-        <p class="muted">Каждый день — немного теории и одна практика. Новый день открывается, когда вы отметите предыдущий.</p>
-        ${C.course.map((d, i) => {
-          const n = i + 1;
-          const isDone = done.includes(n);
-          const open = n === 1 || done.includes(n - 1);
-          const paid = paidFrom && n >= paidFrom;
-          return `
-            <button class="card day ${isDone ? "done" : ""} ${open ? "" : "locked"}" ${open ? `data-go="day/${n}"` : "disabled"}>
-              <span class="num">${isDone ? "✓" : n}</span>
-              <span><span class="title">${d.title}</span>${paid ? `<span class="sub">Платный день</span>` : ""}</span>
-            </button>`;
-        }).join("")}
-        ${psychologistCard()}
-      `);
+      const bar = document.getElementById("gbar");
+      const target = arc * (1 - last.score / 21);
+      if (gsap && !reduceMotion) gsap.to(bar, { strokeDashoffset: target, duration: 1.4, ease: "power3.out", delay: 0.2 });
+      else bar.style.strokeDashoffset = target;
+      countUp(document.getElementById("score"), last.score);
     },
 
     day(nStr) {
@@ -382,46 +693,56 @@
       if (!d) return go("course");
       const done = store.get("course_done", []);
       render(`
-        <p class="muted">День ${n} из ${C.course.length}</p>
+        <div class="dots">${C.course.map((_, k) => `<i class="${done.includes(k + 1) || k + 1 === n ? "on" : ""}"></i>`).join("")}</div>
+        <div class="eyebrow">День ${n} из ${C.course.length}</div>
         <h1>${d.title}</h1>
-        <p>${d.text}</p>
-        <h2>Практика</h2>
-        <div class="notice">${d.practice}</div>
-        ${d.tool ? `<button class="btn secondary" data-go="${d.tool}">Открыть упражнение</button>` : ""}
+        <p class="lead">${d.text}</p>
+        <div class="card">
+          <div class="eyebrow" style="margin-bottom:6px">Практика дня</div>
+          <p style="margin:0">${d.practice}</p>
+          ${d.tool ? `<button class="btn secondary" style="margin-top:14px" data-go="${d.tool}">${icon(d.tool === "test" ? "test" : d.tool, 18)} Открыть упражнение</button>` : ""}
+        </div>
         ${done.includes(n)
           ? `<button class="btn secondary" data-go="course">День пройден ✓</button>`
           : `<button class="btn" id="done">Отметить день пройденным</button>`}
         ${n === 3 || n === 7 || n === 14 ? `
           <h2>Хотите разобрать это со специалистом?</h2>
           <p class="muted">Курс даёт инструменты, а психолог помогает понять, почему тревога появляется именно у вас.</p>
-          <button class="btn secondary" data-psy>${C.psychologist.button}</button>` : ""}
+          ${psychologistCard()}` : ""}
       `);
       const btn = document.getElementById("done");
       if (btn) btn.addEventListener("click", () => {
         if (!done.includes(n)) done.push(n);
         store.set("course_done", done);
-        haptic("medium");
-        go("course");
+        logPractice("course");
+        celebrate();
+        later(() => go("course"), 700);
       });
     },
 
     psychologist() {
       render(`
+        <span class="icon-chip warm" style="width:64px;height:64px;border-radius:22px">${icon("chat", 30)}</span>
         <h1>${C.psychologist.title}</h1>
-        <p>${C.psychologist.text}</p>
-        <button class="btn" data-psy>${C.psychologist.button}</button>
-        <p class="muted" style="margin-top:16px">Откроется сайт ПсиЧата. Ответы теста и записи дневника никуда не передаются.</p>
+        <p class="lead">Иногда техник недостаточно, и это нормально. Психолог поможет понять, откуда берётся тревога именно у вас, и подобрать то, что сработает.</p>
+        <div class="stack">
+          <div class="card"><div class="row"><span class="icon-chip">${icon("clock")}</span><span class="grow"><span class="title">20 минут бесплатно</span><span class="sub">Познакомиться и понять, подходит ли специалист</span></span></div></div>
+          <div class="card"><div class="row"><span class="icon-chip">${icon("shield")}</span><span class="grow"><span class="title">Анонимно</span><span class="sub">Чат, аудио или видео — как вам удобнее</span></span></div></div>
+          <div class="card"><div class="row"><span class="icon-chip">${icon("swap")}</span><span class="grow"><span class="title">Бесплатная замена</span><span class="sub">Если специалист не подойдёт, подберут другого</span></span></div></div>
+        </div>
+        <button class="btn warm" style="margin-top:18px" data-psy>${C.psychologist.button}</button>
+        <p class="muted" style="margin-top:14px">Откроется сайт ПсиЧата. Ответы теста и записи дневника никуда не передаются.</p>
       `);
     },
 
     crisis() {
       render(`
         <h1>${C.crisis.title}</h1>
-        <p>${C.crisis.text}</p>
+        <p class="lead">${C.crisis.text}</p>
         ${C.crisis.contacts.map((c) => `
           <div class="card contact">
             <span><span class="title">${c.name}</span><span class="sub">${c.note}</span></span>
-            <a href="tel:${c.phone.replace(/[^\d+]/g, "")}">${c.phone}</a>
+            <a class="phone" href="tel:${c.phone.replace(/[^\d+]/g, "")}">${c.phone}</a>
           </div>`).join("")}
         <h2>Пока вы ждёте ответа</h2>
         <p>Если можете, побудьте рядом с другим человеком или напишите тому, кому доверяете. Уберите от себя то, чем можно причинить вред.</p>
@@ -430,33 +751,71 @@
     },
   };
 
-  // ---------- Виджеты ----------
-  function breathingWidget(mode, seconds) {
-    return `
-      <div class="breath-wrap"><div class="breath" id="breath">Готовы?</div></div>
-      <p class="muted" style="text-align:center" id="breath-left">${Math.round(seconds / 60)} мин</p>`;
+  function moodReply(v) {
+    const [text, route, label] = MOOD_REPLIES[v];
+    return `<p class="mood-reply">${text}</p><button class="btn secondary" data-go="${route}">${label}</button>`;
   }
 
-  function startBreathing(mode, seconds) {
-    const circle = document.getElementById("breath");
+  // ---------- Дыхательная сфера ----------
+  function orbWidget() {
+    const particles = Array.from({ length: 14 }, (_, i) => {
+      const a = (i / 14) * Math.PI * 2;
+      const r = 120 + Math.random() * 40;
+      return `<i style="--dx:${Math.cos(a) * r}px;--dy:${Math.sin(a) * r}px;animation-delay:${(i * 0.43).toFixed(2)}s"></i>`;
+    }).join("");
+    const c = 2 * Math.PI * 140;
+    return `
+      <div class="orb-stage">
+        <div class="particles">${particles}</div>
+        <svg class="orb-ring" viewBox="0 0 300 300"><circle class="track" cx="150" cy="150" r="140"/>
+          <circle class="bar" id="orb-bar" cx="150" cy="150" r="140" stroke-dasharray="${c}" stroke-dashoffset="${c}"/></svg>
+        <div class="orb-halo h1" id="h1"></div>
+        <div class="orb-halo h2" id="h2"></div>
+        <div class="orb-core" id="core"></div>
+        <div class="orb-label"><b id="orb-phase">Готовы?</b><span id="orb-sec"></span></div>
+      </div>
+      <p class="timer" id="breath-left">&nbsp;</p>`;
+  }
+
+  function startBreathing(mode, seconds, onFinish) {
+    const core = document.getElementById("core");
+    const h1 = document.getElementById("h1");
+    const h2 = document.getElementById("h2");
+    const phaseEl = document.getElementById("orb-phase");
+    const secEl = document.getElementById("orb-sec");
+    const bar = document.getElementById("orb-bar");
     const leftEl = document.getElementById("breath-left");
+    const circ = 2 * Math.PI * 140;
+    const scales = { "Вдох": [1.5, 1.32, 1.18], "Выдох": [1, 1, 1] };
     let phase = 0;
     let left = seconds;
+    let finished = false;
+
+    const setScale = (s, dur) => {
+      [core, h2, h1].forEach((el, k) => {
+        el.style.transitionDuration = dur + "s";
+        el.style.transform = `scale(${s[k]})`;
+      });
+    };
     const step = () => {
-      if (!document.body.contains(circle)) return;
+      if (!document.body.contains(core)) return;
       const [name, dur] = mode.phases[phase % mode.phases.length];
-      circle.textContent = name;
-      circle.style.transitionDuration = dur + "s";
-      if (name === "Вдох") circle.style.transform = "scale(1.9)";
-      if (name === "Выдох") circle.style.transform = "scale(1)";
+      phaseEl.textContent = name;
+      if (scales[name]) setScale(scales[name], dur);
+      haptic(name === "Вдох" ? "soft" : "light");
+      let s = dur;
+      secEl.textContent = s;
+      for (let k = 1; k < dur; k++) later(() => { secEl.textContent = dur - k; }, k * 1000);
       phase++;
       later(step, dur * 1000);
     };
-    later(step, 800);
+    later(step, 900);
     every(() => {
       left--;
+      bar.style.strokeDashoffset = circ * Math.max(left, 0) / seconds;
       if (left <= 0) {
         leftEl.textContent = "Хорошо. Можно продолжать, сколько нужно.";
+        if (!finished) { finished = true; hapticOk(); onFinish && onFinish(); }
         return;
       }
       leftEl.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
@@ -478,18 +837,57 @@
     }, 1000);
   }
 
+  // ---------- Графики ----------
+  function moodChart(moods) {
+    const W = 320, H = 150, P = 24;
+    const x = (i) => P + (i * (W - 2 * P)) / (moods.length - 1);
+    const y = (v) => H - P - (v * (H - 2 * P)) / 4;
+    const pts = moods.map((m, i) => [x(i), y(m.v)]);
+    const d = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    const area = d + ` L${pts[pts.length - 1][0].toFixed(1)} ${H - P} L${pts[0][0].toFixed(1)} ${H - P} Z`;
+    const fmt = (s) => new Date(s).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+    return `<svg class="chart" viewBox="0 0 ${W} ${H + 10}" role="img" aria-label="График настроения">
+      ${[0, 2, 4].map((v) => `<line class="grid" x1="${P}" x2="${W - P}" y1="${y(v)}" y2="${y(v)}"/>`).join("")}
+      <path class="area" d="${area}"/>
+      <path class="line" d="${d}"/>
+      ${pts.map((p) => `<circle class="pt" cx="${p[0]}" cy="${p[1]}" r="4"/>`).join("")}
+      <text x="${P}" y="${H + 8}">${fmt(moods[0].d)}</text>
+      <text x="${W - P}" y="${H + 8}" text-anchor="end">${fmt(moods[moods.length - 1].d)}</text>
+    </svg>`;
+  }
+
+  function testChart(tests) {
+    const W = 320, H = 150, P = 24;
+    const bw = Math.min(36, (W - 2 * P) / tests.length - 10);
+    const step = (W - 2 * P) / tests.length;
+    const y = (v) => H - P - (v * (H - 2 * P)) / 21;
+    return `<svg class="chart" viewBox="0 0 ${W} ${H + 10}" role="img" aria-label="История результатов теста">
+      ${[0, 10, 21].map((v) => `<line class="grid" x1="${P}" x2="${W - P}" y1="${y(v)}" y2="${y(v)}"/><text x="${P - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join("")}
+      ${tests.map((t, i) => {
+        const cx = P + step * i + step / 2;
+        const cls = t.score >= 15 ? "bad" : t.score >= 10 ? "warn" : "";
+        return `<rect class="bar ${cls}" x="${cx - bw / 2}" y="${y(t.score)}" width="${bw}" height="${Math.max(H - P - y(t.score), 3)}" rx="8"/>
+          <text x="${cx}" y="${y(t.score) - 6}" text-anchor="middle">${t.score}</text>
+          <text x="${cx}" y="${H + 8}" text-anchor="middle">${new Date(t.date).toLocaleDateString("ru-RU", { day: "numeric", month: "numeric" })}</text>`;
+      }).join("")}
+    </svg>`;
+  }
+
+  // ---------- Лестница шагов ----------
   function stepsForm() {
     const steps = store.get("ladder", []);
     return `
       <h2>Моя лестница</h2>
       <form id="steps-form">
-        <input type="text" name="s" placeholder="Следующий шаг, от лёгкого к трудному" required>
+        <input id="s-text" type="text" name="s" placeholder="Следующий шаг, от лёгкого к трудному" required>
         <button class="btn secondary" type="submit">Добавить шаг</button>
       </form>
-      ${steps.map((s, i) => `
-        <button class="card day ${s.done ? "done" : ""}" data-step="${i}">
-          <span class="num">${s.done ? "✓" : i + 1}</span><span>${esc(s.text)}</span>
-        </button>`).join("")}`;
+      <div class="path" style="margin-top:14px">
+        ${steps.map((s, i) => `
+          <button class="card node ${s.done ? "done" : ""}" data-step="${i}">
+            <span class="num">${s.done ? "✓" : i + 1}</span><span class="grow">${esc(s.text)}</span>
+          </button>`).join("")}
+      </div>`;
   }
 
   function bindSteps() {
@@ -506,7 +904,7 @@
       const s = steps[Number(el.dataset.step)];
       s.done = !s.done;
       store.set("ladder", steps);
-      haptic("medium");
+      if (s.done) { logPractice("steps"); celebrate(); } else haptic();
       views.technique("steps");
     }));
   }
@@ -519,20 +917,35 @@
     go("result");
   }
 
+  // ---------- Нижнее меню ----------
+  const TABS = [["today", "Сегодня"], ["practices", "Практики"], ["course", "Курс"], ["progress", "Прогресс"]];
+  tabbar.innerHTML = `<i class="tab-indicator" id="tab-ind"></i>` +
+    TABS.map(([id, name]) => `<button class="tab" data-tab="${id}">${icon(id, 22)}<span>${name}</span></button>`).join("");
+  tabbar.querySelectorAll("[data-tab]").forEach((el) => el.addEventListener("click", () => { haptic(); go(el.dataset.tab); }));
+
   // ---------- Маршрутизация ----------
+  const tabIds = TABS.map((t) => t[0]);
   function route() {
     clearTimers();
-    const [name, arg] = (location.hash.slice(1) || "home").split("/");
-    const view = views[name] || views.home;
-    const isHome = view === views.home;
-    backBtn.hidden = isHome;
-    if (tg && tg.BackButton) isHome ? tg.BackButton.hide() : tg.BackButton.show();
+    let [name, arg] = (location.hash.slice(1) || "today").split("/");
+    if (name === "home") name = "today";
+    const view = views[name] || views.today;
+    const tabIndex = tabIds.indexOf(views[name] ? name : "today");
+    const isTab = tabIndex >= 0;
+    tabbar.hidden = !isTab;
+    document.body.classList.toggle("no-tabs", !isTab);
+    backBtn.hidden = isTab;
+    if (inTelegram && tg.BackButton) isTab ? tg.BackButton.hide() : tg.BackButton.show();
+    if (isTab) {
+      document.getElementById("tab-ind").style.transform = `translateX(${tabIndex * 100}%)`;
+      tabbar.querySelectorAll(".tab").forEach((t, i) => t.classList.toggle("active", i === tabIndex));
+    }
     view(arg);
   }
 
-  const goBack = () => (history.length > 1 ? history.back() : go("home"));
+  const goBack = () => (history.length > 1 ? history.back() : go("today"));
   backBtn.addEventListener("click", goBack);
-  if (tg && tg.BackButton) tg.BackButton.onClick(goBack);
+  if (inTelegram && tg.BackButton) tg.BackButton.onClick(goBack);
   document.getElementById("crisis-btn").addEventListener("click", () => go("crisis"));
   window.addEventListener("hashchange", route);
   route();

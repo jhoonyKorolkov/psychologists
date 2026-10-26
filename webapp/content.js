@@ -86,6 +86,7 @@ window.CONTENT = {
   techniques: [
     {
       id: "breathing",
+      duration: "3 мин",
       title: "Дыхательные упражнения",
       short: "Замедлить тело за 2–5 минут",
       body:
@@ -96,6 +97,7 @@ window.CONTENT = {
     },
     {
       id: "grounding",
+      duration: "2 мин",
       title: "Заземление 5-4-3-2-1",
       short: "Вернуть внимание из мыслей в «здесь и сейчас»",
       body:
@@ -105,6 +107,7 @@ window.CONTENT = {
     },
     {
       id: "pmr",
+      duration: "4 мин",
       title: "Мышечная релаксация",
       short: "Снять напряжение в теле",
       body:
@@ -114,6 +117,7 @@ window.CONTENT = {
     },
     {
       id: "diary",
+      duration: "5 мин",
       title: "Дневник тревожных мыслей",
       short: "Разобрать мысль, которая не отпускает",
       body:
@@ -123,6 +127,7 @@ window.CONTENT = {
     },
     {
       id: "worry",
+      duration: "15 мин",
       title: "Время для беспокойства",
       short: "Перестать тревожиться весь день",
       body:
@@ -134,6 +139,7 @@ window.CONTENT = {
     },
     {
       id: "steps",
+      duration: "10 мин",
       title: "Маленькие шаги вместо избегания",
       short: "Как избегание усиливает тревогу",
       body:
