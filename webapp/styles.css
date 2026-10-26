@@ -270,9 +270,10 @@ button.card.warm:hover { background: var(--soft-2); }
 .orb-ring circle { fill: none; stroke-width: 6; }
 .orb-ring .track { stroke: transparent; }
 .orb-ring .bar { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.particles { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; color: var(--accent); }
 .orb-label { position: relative; z-index: 2; text-align: center; color: var(--orb-ink); pointer-events: none; }
 .orb-label b { display: block; font: 700 20px var(--font-display); letter-spacing: -0.02em; }
-.orb-label span { font: 700 34px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.orb-label span { display: block; min-height: 34px; font: 700 34px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .timer { text-align: center; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -288,6 +289,9 @@ button.card.warm:hover { background: var(--soft-2); }
 .dots i { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-2); transition: background .3s; }
 .dots i.on { background: var(--accent); }
 .step-num { font: 700 120px/1 var(--font-display); letter-spacing: -0.05em; text-align: center; margin-top: 12px; color: var(--accent); }
+.pmr-stage { position: relative; height: 250px; display: grid; place-items: center; }
+.pmr-stage .count { position: relative; z-index: 2; margin: 0; }
+#app.entering > * { transition: none !important; }
 .count { font: 700 72px/1 var(--font-display); letter-spacing: -0.04em; text-align: center; margin: 16px 0; font-variant-numeric: tabular-nums; }
 
 .option {
@@ -315,6 +319,10 @@ label { font-size: 15px; font-weight: 700; }
 input[type=range] { width: 100%; accent-color: var(--accent); margin: 8px 0 14px; }
 
 .notice { border-radius: var(--radius); padding: 18px; background: var(--surface-2); font-weight: 700; }
+.notice.statement { display: grid; align-items: center; }
+.notice.statement > * { grid-area: 1 / 1; }
+.notice.statement .sizer { display: grid; visibility: hidden; }
+.notice.statement .sizer > span { grid-area: 1 / 1; }
 .notice.danger { background: color-mix(in srgb, var(--danger) 18%, var(--surface)); font-weight: 600; }
 
 /* ---------- Курс ---------- */

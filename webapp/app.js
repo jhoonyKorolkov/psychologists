@@ -120,9 +120,14 @@
   const every = (fn, ms) => { const id = setInterval(fn, ms); timers.push(id); return id; };
   const clearTimers = () => { timers.forEach((id) => { clearTimeout(id); clearInterval(id); }); timers = []; };
 
+  // Пока GSAP двигает блоки, CSS-переходы на transform выключены: иначе они спорят с анимацией и блок дёргается в конце.
   function animateIn(root) {
     if (!gsap || reduceMotion) return;
-    gsap.from(root.children, { y: 18, opacity: 0, duration: 0.5, stagger: 0.045, ease: "power3.out", clearProps: "transform,opacity" });
+    root.classList.add("entering");
+    gsap.from(root.children, {
+      y: 18, opacity: 0, duration: 0.5, stagger: 0.045, ease: "power3.out", clearProps: "transform,opacity",
+      onComplete: () => root.classList.remove("entering"),
+    });
   }
 
   function countUp(el, to, suffix) {
@@ -417,7 +422,7 @@
       render(`
         <h1>${C.sos.title}</h1>
         <p>${C.sos.intro}</p>
-        <div class="notice" id="statement">${statements[0]}</div>
+        <div class="notice statement"><span class="sizer" aria-hidden="true">${statements.map((t) => `<span>${t}</span>`).join("")}</span><span id="statement">${statements[0]}</span></div>
         <h2>Шаг 1. Дышите вместе со сферой</h2>
         ${orbWidget()}
         <h2>Шаг 2. Вернитесь в «здесь и сейчас»</h2>
@@ -547,9 +552,12 @@
           <div class="dots">${groups.map((_, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</div>
           <h1 class="center">${name}</h1>
           <p class="center lead" id="pmr-text">${action} и удерживайте напряжение…</p>
-          <div class="count" id="pmr-count">5</div>
+          <div class="pmr-stage"><canvas class="particles" id="pmr-particles" aria-hidden="true"></canvas><div class="count" id="pmr-count">5</div></div>
         `);
+        const particles = createParticles(document.getElementById("pmr-particles"), { count: 40, outer: 112, inner: () => 46, mode: "release" });
+        particles.set("tense");
         countdown(5, "pmr-count", () => {
+          particles.set("release");
           haptic("heavy");
           const t = document.getElementById("pmr-text");
           t.textContent = "Резко отпустите. Почувствуйте, как уходит напряжение…";
@@ -784,6 +792,76 @@
     return `<p class="mood-reply">${text}</p><button class="btn secondary" data-go="${route}">${label}</button>${v <= 1 ? psyLink("Поговорить с психологом") : ""}`;
   }
 
+  // ---------- Частицы ----------
+  // Мелкие точки вокруг сферы показывают движение воздуха: на вдохе стекаются к центру и тают у края сферы,
+  // на выдохе расходятся наружу, на задержке медленно кружат. В релаксации на напряжении сжимаются и дрожат,
+  // на расслаблении спокойно расплываются. Плоские точки цвета акцента, без свечения.
+  function createParticles(canvas, opts) {
+    const api = { set() {} };
+    if (!canvas || reduceMotion || !canvas.getContext) return api;
+    const ctx = canvas.getContext("2d");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const box = canvas.getBoundingClientRect();
+    const w = box.width, h = box.height, cx = w / 2, cy = h / 2;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+    const color = getComputedStyle(canvas).color;
+    const outer = opts.outer;
+    const rand = (a, b) => a + Math.random() * (b - a);
+
+    const ps = Array.from({ length: opts.count }, () => ({
+      a: rand(0, Math.PI * 2),
+      r: rand(opts.inner() + 8, outer),
+      home: rand(0.35, 1),
+      spin: rand(0.04, 0.12) * (Math.random() < 0.5 ? -1 : 1),
+      size: rand(1.4, 3.2),
+      alpha: rand(0.45, 0.9),
+      fade: 1,
+    }));
+
+    let mode = opts.mode || "hold";
+    let speed = 0, targetSpeed = 0;
+    api.set = (m, dur) => {
+      mode = m;
+      const span = outer - opts.inner();
+      targetSpeed = m === "in" ? -span / (dur || 4) * 1.15 : m === "out" ? span / (dur || 4) * 0.9 : 0;
+    };
+
+    let last = performance.now();
+    const frame = (now) => {
+      if (!document.body.contains(canvas)) return;
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      speed += (targetSpeed - speed) * Math.min(dt * 3, 1);
+      const inner = opts.inner();
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = color;
+      for (const p of ps) {
+        if (mode === "tense" || mode === "release") {
+          const target = mode === "tense" ? inner + 6 + p.home * 14 : inner + 10 + p.home * (outer - inner - 10);
+          p.r += (target - p.r) * Math.min(dt * (mode === "tense" ? 4 : 0.9), 1);
+          p.a += p.spin * dt * (mode === "tense" ? 0.3 : 1);
+        } else {
+          p.r += speed * dt * (0.7 + p.home * 0.6);
+          p.a += (p.spin + speed * 0.0016) * dt;
+          if (p.r < inner + 2) { p.r = outer; p.fade = 0; }
+          if (p.r > outer) { p.r = inner + 4; p.fade = 0; }
+        }
+        p.fade = Math.min(p.fade + dt * 1.5, 1);
+        // Точки тают у края сферы и у внешнего кольца, чтобы не появляться и не исчезать резко.
+        const edge = Math.min((p.r - inner) / 18, (outer - p.r) / 14, 1);
+        const jitter = mode === "tense" ? rand(-1.2, 1.2) : 0;
+        ctx.globalAlpha = Math.max(edge, 0) * p.alpha * p.fade;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(p.a) * p.r + jitter, cy + Math.sin(p.a) * p.r + jitter, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+    return api;
+  }
+
   // ---------- Дыхательная сфера ----------
   function orbWidget() {
     const c = 2 * Math.PI * 140;
@@ -794,6 +872,7 @@
         <div class="orb-halo h1" id="h1"></div>
         <div class="orb-halo h2" id="h2"></div>
         <div class="orb-core" id="core"></div>
+        <canvas class="particles" id="orb-particles" aria-hidden="true"></canvas>
         <div class="orb-label"><b id="orb-phase">Готовы?</b><span id="orb-sec"></span></div>
       </div>
       <p class="timer" id="breath-left">&nbsp;</p>
@@ -814,6 +893,12 @@
     let left = seconds;
     let finished = false;
 
+    const particles = createParticles(document.getElementById("orb-particles"), {
+      count: 54, outer: 152,
+      inner: () => 66 * (new DOMMatrixReadOnly(getComputedStyle(core).transform).a || 1),
+    });
+    const flows = { "Вдох": "in", "Выдох": "out" };
+
     const setScale = (s, dur) => {
       [core, h2, h1].forEach((el, k) => {
         el.style.transitionDuration = dur + "s";
@@ -825,6 +910,7 @@
       const [name, dur] = mode.phases[phase % mode.phases.length];
       phaseEl.textContent = name;
       if (scales[name]) setScale(scales[name], dur);
+      particles.set(flows[name] || "hold", dur);
       haptic(name === "Вдох" ? "soft" : "light");
       let s = dur;
       secEl.textContent = s;
@@ -977,5 +1063,7 @@
   crisisBtn.innerHTML = `${icon("phone", 16)} Мне очень плохо`;
   crisisBtn.addEventListener("click", () => go("crisis"));
   window.addEventListener("hashchange", route);
-  route();
+  // Первый экран рисуем, когда шрифты готовы (но не дольше 1 секунды), чтобы заголовки не перескакивали после появления.
+  const fontsReady = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+  Promise.race([fontsReady, new Promise((r) => setTimeout(r, 1000))]).then(route);
 })();
