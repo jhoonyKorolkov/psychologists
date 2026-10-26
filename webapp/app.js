@@ -656,7 +656,7 @@
         <p class="lead">${level.text}</p>
         ${level.recommendPsychologist ? `
           <div class="card warm"><p>${C.psychologist.text}</p></div>
-          <button class="btn peach" data-psy>${C.psychologist.button}</button>
+          <button class="btn sand" data-psy>${C.psychologist.button}</button>
           <button class="btn secondary" data-go="course">Начать курс самопомощи</button>
         ` : `
           <button class="btn" data-go="course">Начать курс «14 дней спокойнее»</button>
@@ -711,7 +711,7 @@
           <div class="card"><div class="row"><span class="ico">${icon("shield", 26)}</span><span class="grow"><span class="title">Анонимно</span><span class="sub">Чат, аудио или видео — как вам удобнее</span></span></div></div>
           <div class="card"><div class="row"><span class="ico">${icon("swap", 26)}</span><span class="grow"><span class="title">Бесплатная замена</span><span class="sub">Если специалист не подойдёт, подберут другого</span></span></div></div>
         </div>
-        <button class="btn peach" data-psy>${C.psychologist.button}</button>
+        <button class="btn sand" data-psy>${C.psychologist.button}</button>
         <p class="muted">Откроется сайт ПсиЧата. Ответы теста и записи дневника никуда не передаются.</p>
       `);
     },
