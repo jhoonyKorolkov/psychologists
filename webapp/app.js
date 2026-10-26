@@ -188,6 +188,9 @@
     }));
   }
 
+  // Короткая ссылка в ПсиЧат для мест, где большая карточка была бы лишней.
+  const psyLink = (text) => `<button class="psy-link" data-psy>${icon("chat", 18)} ${text || "Разобрать это с психологом"}</button>`;
+
   const psychologistCard = () => `
     <button class="card warm" data-go="psychologist">
       <div class="row">
@@ -249,6 +252,8 @@
           <span class="go">${icon("play", 14)} Начать</span>
         </button>
 
+        ${psychologistCard()}
+
         <button class="card" data-go="${cs.finished ? "course" : "day/" + cs.next}">
           <div class="row">
             ${ringSvg(cs.done.length, C.course.length)}
@@ -272,7 +277,11 @@
           </div>
         </button>
 
-        ${psychologistCard()}
+        <div class="card">
+          <span class="title">Тревога возвращается снова и снова?</span>
+          <p class="sub" style="margin-top:6px">Самопомощь снимает остроту, а психолог помогает понять причину. В ПсиЧате первая встреча 20 минут бесплатно и анонимно.</p>
+          <button class="btn" style="margin-top:14px" data-psy>${C.psychologist.button}</button>
+        </div>
         <p class="muted">${C.disclaimer}</p>
       `);
       fillRings();
@@ -287,6 +296,7 @@
         const box = document.getElementById("mood-reply");
         box.innerHTML = moodReply(v);
         box.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
+        box.querySelectorAll("[data-psy]").forEach((b) => b.addEventListener("click", () => openExternal(C.config.psychatUrl)));
         if (gsap && !reduceMotion) gsap.from(box.children, { y: 8, opacity: 0, duration: 0.4 });
       }));
     },
@@ -302,6 +312,7 @@
           ${practiceItem({ id: "distortions", title: "Ловушки мышления", short: "Как тревожный ум ошибается", duration: "" }, "distortions")}
           ${practiceItem({ id: "test", title: "Тест на тревожность", short: "GAD-7, 7 вопросов", duration: "2 мин" }, "test")}
         </div>
+        ${psychologistCard()}
       `);
     },
 
@@ -357,7 +368,8 @@
         <div class="card">${tests.length ? testChart(tests) : `<p class="muted">Пройдите тест, чтобы видеть, как меняется тревога. Повторяйте раз в 2 недели.</p>`}
           <button class="btn secondary" style="margin-top:16px" data-go="test">${tests.length ? "Пройти ещё раз" : "Пройти тест"}</button>
         </div>
-        <p class="muted" style="margin-top:16px">Все данные хранятся только на вашем телефоне.</p>
+        ${psychologistCard()}
+        <p class="muted">Все данные хранятся только на вашем телефоне.</p>
       `);
       countUp(document.getElementById("st-streak"), streak());
       countUp(document.getElementById("st-prac"), log.length);
@@ -409,6 +421,7 @@
         <p class="center muted">Вы только что сами помогли себе выйти из тревоги. Чем чаще тренировать эти навыки в спокойном состоянии, тем быстрее они срабатывают в трудный момент.</p>
         <button class="btn" data-go="course">Тренироваться в курсе</button>
         <button class="btn secondary" data-go="today">На главную</button>
+        ${psyLink()}
       `);
       celebrate();
     },
@@ -431,6 +444,7 @@
         <p class="lead">${t.body}</p>
         ${t.tool && t.id !== "steps" ? `<button class="btn" data-go="${t.tool}">${icon("play", 16)} Начать</button>` : ""}
         ${t.id === "steps" ? stepsForm() : ""}
+        ${psychologistCard()}
       `);
       if (t.id === "steps") bindSteps();
     },
@@ -467,6 +481,7 @@
             <p class="center muted">Внимание вернулось в настоящий момент. Прислушайтесь: как вы себя чувствуете?</p>
             <button class="btn" data-go="today">На главную</button>
             <button class="btn secondary" data-go="breathing">Подышать ещё</button>
+            ${psyLink()}
           `);
           return celebrate();
         }
@@ -496,6 +511,7 @@
             <h1 class="center">Тело отпустило</h1>
             <p class="center muted">Побудьте ещё минуту в расслаблении. Заметьте, как ощущается тело сейчас по сравнению с началом.</p>
             <button class="btn" data-go="today">На главную</button>
+            ${psyLink()}
           `);
           return celebrate();
         }
@@ -545,6 +561,7 @@
             ${e.alternative ? `<span class="sub">${esc(e.alternative)}</span>` : ""}
             <span class="sub">${new Date(e.date).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}, тревога ${e.level} из 10</span>
           </div>`).join("")}
+        ${psychologistCard()}
         <p class="muted">Записи хранятся только на вашем устройстве.</p>
       `);
       const form = document.getElementById("diary-form");
@@ -573,6 +590,7 @@
         <p class="lead">Тревожный мозг часто ошибается одинаково. Узнали свою мысль? Это хорошо: значит, это не факт, а привычка ума.</p>
         ${C.distortions.map(([name, ex]) => `<div class="card"><span class="title">${name}</span><span class="sub">${ex}</span></div>`).join("")}
         <button class="btn" data-go="diary">К дневнику</button>
+        ${psyLink()}
       `);
     },
 
@@ -593,6 +611,7 @@
           <button class="btn secondary" id="worry-start">${icon("clock", 18)} Начать 15 минут</button>
           ${list.length ? `<button class="btn secondary" id="worry-clear">Время вышло, очистить список</button>` : ""}
         </div>
+        ${psychologistCard()}
       `);
       document.getElementById("worry-form").addEventListener("submit", (ev) => {
         ev.preventDefault();
@@ -656,7 +675,7 @@
         <p class="lead">${level.text}</p>
         ${level.recommendPsychologist ? `
           <div class="card warm"><p>${C.psychologist.text}</p></div>
-          <button class="btn sand" data-psy>${C.psychologist.button}</button>
+          <button class="btn" data-psy>${C.psychologist.button}</button>
           <button class="btn secondary" data-go="course">Начать курс самопомощи</button>
         ` : `
           <button class="btn" data-go="course">Начать курс «14 дней спокойнее»</button>
@@ -690,7 +709,7 @@
         ${n === 3 || n === 7 || n === 14 ? `
           <h2>Хотите разобрать это со специалистом?</h2>
           <p class="muted">Курс даёт инструменты, а психолог помогает понять, почему тревога появляется именно у вас.</p>
-          ${psychologistCard()}` : ""}
+          ${psychologistCard()}` : psyLink()}
       `);
       const btn = document.getElementById("done");
       if (btn) btn.addEventListener("click", () => {
@@ -711,7 +730,7 @@
           <div class="card"><div class="row"><span class="ico">${icon("shield", 26)}</span><span class="grow"><span class="title">Анонимно</span><span class="sub">Чат, аудио или видео — как вам удобнее</span></span></div></div>
           <div class="card"><div class="row"><span class="ico">${icon("swap", 26)}</span><span class="grow"><span class="title">Бесплатная замена</span><span class="sub">Если специалист не подойдёт, подберут другого</span></span></div></div>
         </div>
-        <button class="btn sand" data-psy>${C.psychologist.button}</button>
+        <button class="btn" data-psy>${C.psychologist.button}</button>
         <p class="muted">Откроется сайт ПсиЧата. Ответы теста и записи дневника никуда не передаются.</p>
       `);
     },
@@ -734,7 +753,7 @@
 
   function moodReply(v) {
     const [text, route, label] = MOOD_REPLIES[v];
-    return `<p class="mood-reply">${text}</p><button class="btn secondary" data-go="${route}">${label}</button>`;
+    return `<p class="mood-reply">${text}</p><button class="btn secondary" data-go="${route}">${label}</button>${v <= 1 ? psyLink("Поговорить с психологом") : ""}`;
   }
 
   // ---------- Дыхательная сфера ----------
@@ -749,7 +768,8 @@
         <div class="orb-core" id="core"></div>
         <div class="orb-label"><b id="orb-phase">Готовы?</b><span id="orb-sec"></span></div>
       </div>
-      <p class="timer" id="breath-left">&nbsp;</p>`;
+      <p class="timer" id="breath-left">&nbsp;</p>
+      ${psyLink("Поговорить с психологом")}`;
   }
 
   function startBreathing(mode, seconds, onFinish) {
@@ -921,7 +941,9 @@
   const goBack = () => (history.length > 1 ? history.back() : go("today"));
   backBtn.addEventListener("click", goBack);
   if (inTelegram && tg.BackButton) tg.BackButton.onClick(goBack);
-  document.getElementById("crisis-btn").addEventListener("click", () => go("crisis"));
+  const crisisBtn = document.getElementById("crisis-btn");
+  crisisBtn.innerHTML = `${icon("phone", 16)} Мне очень плохо`;
+  crisisBtn.addEventListener("click", () => go("crisis"));
   window.addEventListener("hashchange", route);
   route();
 })();
