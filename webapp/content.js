@@ -9,7 +9,7 @@ window.CONTENT = {
     // С какого дня курс становится платным. null — весь курс бесплатный (для прототипа).
     paidFromDay: null,
     // Номер счётчика Яндекс Метрики (metrika.yandex.ru), например 98765432. null — аналитика выключена.
-    metrikaId: null,
+    metrikaId: 113796991,
   },
 
   crisis: {
