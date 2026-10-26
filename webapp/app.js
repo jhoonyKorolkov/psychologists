@@ -5,7 +5,6 @@
   const tg = window.Telegram && window.Telegram.WebApp;
   const inTelegram = !!(tg && tg.initData);
   const gsap = window.gsap;
-  const confetti = window.confetti;
   const reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const app = document.getElementById("app");
@@ -59,6 +58,7 @@
   const haptic = (type) => { try { inTelegram && tg.HapticFeedback.impactOccurred(type || "light"); } catch (e) { /* вне Telegram */ } };
   const hapticOk = () => { try { inTelegram && tg.HapticFeedback.notificationOccurred("success"); } catch (e) { /* вне Telegram */ } };
   const go = (route) => { location.hash = route; };
+  const cap = (str) => str.charAt(0).toUpperCase() + str.slice(1);
   const plural = (n, one, few, many) => {
     const m10 = n % 10, m100 = n % 100;
     if (m10 === 1 && m100 !== 11) return one;
@@ -80,11 +80,12 @@
     return C.crisis.triggers.some((w) => t.includes(w));
   }
 
+  // Отметка выполненного: большая галочка поднимается и встаёт на место, телефон отвечает вибрацией.
   function celebrate() {
     hapticOk();
-    if (!confetti || reduceMotion) return;
-    const colors = ["#2f7d6b", "#6cc5ae", "#f4b48a", "#ffd9bd", "#a6d2c6"];
-    confetti({ particleCount: 90, spread: 75, origin: { y: 0.7 }, colors, scalar: 0.9, ticks: 160 });
+    const mark = app.querySelector(".step-num");
+    if (!gsap || reduceMotion || !mark) return;
+    gsap.fromTo(mark, { scale: 0.3, rotate: -20, opacity: 0 }, { scale: 1, rotate: 0, opacity: 1, duration: 0.8, ease: "back.out(2.4)" });
   }
 
   // Таймеры текущего экрана останавливаются при переходе на другой.
@@ -156,11 +157,11 @@
   ];
   function moodFace(i) {
     const m = MOODS[i];
-    const y = 23;
-    return `<svg viewBox="0 0 40 40" aria-hidden="true">
-      <circle cx="20" cy="20" r="18" fill="${m.color}"/>
-      <circle cx="14" cy="16" r="2.2" fill="#2b2b2b"/><circle cx="26" cy="16" r="2.2" fill="#2b2b2b"/>
-      <path d="M13 ${y + (m.mouth < 0 ? 2 : 0)} Q20 ${y + m.mouth + (m.mouth < 0 ? 2 : 0)} 27 ${y + (m.mouth < 0 ? 2 : 0)}" stroke="#2b2b2b" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    const y = m.mouth < 0 ? 26 : 24;
+    return `<svg viewBox="0 0 40 40" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+      <circle cx="20" cy="20" r="17"/>
+      <path d="M14 15.5v1.5M26 15.5v1.5"/>
+      <path d="M13 ${y} Q20 ${y + m.mouth} 27 ${y}"/>
     </svg>`;
   }
   const MOOD_REPLIES = [
@@ -188,19 +189,19 @@
   }
 
   const psychologistCard = () => `
-    <button class="card warm-card" data-go="psychologist">
+    <button class="card warm" data-go="psychologist">
       <div class="row">
-        <span class="icon-chip warm">${icon("chat", 24)}</span>
+        <span class="ico">${icon("chat", 26)}</span>
         <span class="grow"><span class="title">Поговорить с психологом</span><span class="sub">Первая встреча 20 минут бесплатно</span></span>
         <span class="chev">${icon("next", 18)}</span>
       </div>
     </button>`;
 
-  const techniqueTile = (t) => `
-    <button class="tile" data-go="${t.tool && t.id !== "steps" ? t.tool : "technique/" + t.id}">
-      <span class="icon-chip">${icon(t.id, 22)}</span>
-      <span class="title">${t.title}</span>
-      <span class="sub">${t.duration}</span>
+  const practiceItem = (t, route) => `
+    <button class="item" data-go="${route || (t.tool && t.id !== "steps" ? t.tool : "technique/" + t.id)}">
+      <span class="ico">${icon(t.id, 24)}</span>
+      <span class="grow"><span class="title">${t.title}</span><span class="sub">${t.short}</span></span>
+      <span class="meta">${t.duration}</span>
     </button>`;
 
   function greeting() {
@@ -229,8 +230,8 @@
       const dayTitle = C.course[cs.next - 1].title;
       render(`
         <div>
-          <div class="eyebrow">${new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}</div>
           <h1>${greeting()}</h1>
+          <p class="muted" style="margin-top:8px">${cap(new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" }))}</p>
         </div>
 
         <div class="card">
@@ -242,33 +243,29 @@
         </div>
 
         <button class="hero" data-go="sos">
-          <i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i>
-          <span class="hero-title">Мне тревожно прямо сейчас</span>
-          <span class="hero-sub">Дыхание и заземление — станет легче за 3 минуты</span>
-          <span class="pill">${icon("play", 14)} Начать</span>
-          <i class="mini-orb"></i>
+          <span class="rings" aria-hidden="true"><i class="r1"></i><i class="r2"></i><i class="r3"></i></span>
+          <span class="hero-title">Тревожно сейчас?</span>
+          <span class="hero-sub">Дыхание и заземление помогут за 3 минуты.</span>
+          <span class="go">${icon("play", 14)} Начать</span>
         </button>
 
         <button class="card" data-go="${cs.finished ? "course" : "day/" + cs.next}">
           <div class="row">
             ${ringSvg(cs.done.length, C.course.length)}
             <span class="grow">
-              <span class="eyebrow">${cs.finished ? "Курс пройден" : "Курс · день " + cs.next}</span>
-              <span class="title">${cs.finished ? "14 дней спокойнее" : dayTitle}</span>
-              <span class="sub">${cs.done.length ? "Продолжить" : "10 минут в день по методам КПТ"}</span>
+              <span class="title">${cs.finished ? "Курс пройден" : dayTitle}</span>
+              <span class="sub">${cs.finished ? "14 дней спокойнее" : `Курс, день ${cs.next} из ${C.course.length}`}</span>
             </span>
             <span class="chev">${icon("next", 18)}</span>
           </div>
         </button>
 
-        <div>
-          <h2>Быстрые практики</h2>
-          <div class="rail">${C.techniques.map(techniqueTile).join("")}</div>
-        </div>
+        <h2>Быстрые практики</h2>
+        <div class="list">${C.techniques.slice(0, 4).map((t) => practiceItem(t)).join("")}</div>
 
         <button class="card" data-go="test">
           <div class="row">
-            <span class="icon-chip">${icon("test", 24)}</span>
+            <span class="ico">${icon("test", 26)}</span>
             <span class="grow"><span class="title">Тест на тревожность</span>
             <span class="sub">${last ? `Последний результат: ${last.score} из 21` : "7 вопросов · 2 минуты"}</span></span>
             <span class="chev">${icon("next", 18)}</span>
@@ -297,23 +294,14 @@
     practices() {
       render(`
         <h1>Практики</h1>
-        <p class="muted">Короткие упражнения из когнитивно-поведенческой терапии. Лучше всего работают, если делать их регулярно, а не только в трудный момент.</p>
-        <div class="grid2">
-          ${C.techniques.map(techniqueTile).join("")}
-          <button class="tile" data-go="distortions">
-            <span class="icon-chip warm">${icon("distortions", 22)}</span>
-            <span class="title">Ловушки мышления</span><span class="sub">Справочник</span>
-          </button>
-          <button class="tile" data-go="test">
-            <span class="icon-chip warm">${icon("test", 22)}</span>
-            <span class="title">Тест GAD-7</span><span class="sub">2 мин</span>
-          </button>
+        <p class="lead">Короткие упражнения из когнитивно-поведенческой терапии. Лучше всего работают, если делать их каждый день, а не только в трудный момент.</p>
+        <h2>Упражнения</h2>
+        <div class="list">${C.techniques.map((t) => practiceItem(t, "technique/" + t.id)).join("")}</div>
+        <h2>Справочник и тест</h2>
+        <div class="list">
+          ${practiceItem({ id: "distortions", title: "Ловушки мышления", short: "Как тревожный ум ошибается", duration: "" }, "distortions")}
+          ${practiceItem({ id: "test", title: "Тест на тревожность", short: "GAD-7, 7 вопросов", duration: "2 мин" }, "test")}
         </div>
-        <h2>Как это работает</h2>
-        ${C.techniques.map((t) => `
-          <button class="card" data-go="technique/${t.id}">
-            <div class="row"><span class="grow"><span class="title">${t.title}</span><span class="sub">${t.short}</span></span><span class="chev">${icon("next", 18)}</span></div>
-          </button>`).join("")}
       `);
     },
 
@@ -326,11 +314,11 @@
           <div class="row">
             ${ringSvg(cs.done.length, C.course.length, "big")}
             <span class="grow">
-              <span class="title">${cs.finished ? "Курс пройден!" : cs.done.length ? "Вы на пути" : "Начнём?"}</span>
+              <span class="title">${cs.finished ? "Курс пройден" : cs.done.length ? "Вы на пути" : "Начнём?"}</span>
               <span class="sub">Каждый день — немного теории и одна практика, около 10 минут.</span>
             </span>
           </div>
-          ${cs.finished ? "" : `<button class="btn" style="margin-top:16px" data-go="day/${cs.next}">${cs.done.length ? "Продолжить: день " + cs.next : "Начать первый день"}</button>`}
+          ${cs.finished ? "" : `<button class="btn" data-go="day/${cs.next}">${cs.done.length ? "Продолжить: день " + cs.next : "Начать первый день"}</button>`}
         </div>
         <div class="path">
           ${C.course.map((d, i) => {
@@ -359,15 +347,15 @@
       render(`
         <h1>Мой прогресс</h1>
         <div class="stats">
-          <div class="card stat"><b id="st-streak">0</b><span>${icon("flame", 14)} ${plural(streak(), "день", "дня", "дней")} подряд</span></div>
+          <div class="card stat field"><b id="st-streak">0</b><span>${plural(streak(), "день", "дня", "дней")} подряд</span></div>
           <div class="card stat"><b id="st-prac">0</b><span>практик</span></div>
           <div class="card stat"><b id="st-course">0</b><span>дней курса</span></div>
         </div>
         <h2>Настроение</h2>
-        <div class="card">${moods.length >= 2 ? moodChart(moods) : `<p class="muted" style="margin:0">Отмечайте настроение на главном экране — здесь появится график за 2 недели.</p>`}</div>
+        <div class="card">${moods.length >= 2 ? moodChart(moods) : `<p class="muted">Отмечайте настроение на главном экране — здесь появится график за 2 недели.</p>`}</div>
         <h2>Уровень тревоги (GAD-7)</h2>
-        <div class="card">${tests.length ? testChart(tests) : `<p class="muted" style="margin:0">Пройдите тест, чтобы видеть, как меняется тревога. Повторяйте раз в 2 недели.</p>`}
-          <button class="btn secondary" style="margin-top:14px" data-go="test">${tests.length ? "Пройти ещё раз" : "Пройти тест"}</button>
+        <div class="card">${tests.length ? testChart(tests) : `<p class="muted">Пройдите тест, чтобы видеть, как меняется тревога. Повторяйте раз в 2 недели.</p>`}
+          <button class="btn secondary" style="margin-top:16px" data-go="test">${tests.length ? "Пройти ещё раз" : "Пройти тест"}</button>
         </div>
         <p class="muted" style="margin-top:16px">Все данные хранятся только на вашем телефоне.</p>
       `);
@@ -390,15 +378,15 @@
       render(`
         <h1>${C.sos.title}</h1>
         <p>${C.sos.intro}</p>
-        <div class="notice" id="statement"><b>${statements[0]}</b></div>
+        <div class="notice" id="statement">${statements[0]}</div>
         <h2>Шаг 1. Дышите вместе со сферой</h2>
         ${orbWidget()}
         <h2>Шаг 2. Вернитесь в «здесь и сейчас»</h2>
-        <button class="card" data-go="grounding"><div class="row"><span class="icon-chip">${icon("grounding")}</span><span class="grow"><span class="title">Заземление 5-4-3-2-1</span><span class="sub">2 минуты</span></span><span class="chev">${icon("next", 18)}</span></div></button>
+        <button class="card" data-go="grounding"><div class="row"><span class="ico">${icon("grounding", 26)}</span><span class="grow"><span class="title">Заземление 5-4-3-2-1</span><span class="sub">2 минуты</span></span><span class="chev">${icon("next", 18)}</span></div></button>
         <h2>Стало легче?</h2>
-        <div class="grid2">
+        <div class="pair">
           <button class="btn" data-go="sos-better">Да, спасибо</button>
-          <button class="btn secondary" data-go="sos-worse" style="margin-top:0">Всё ещё плохо</button>
+          <button class="btn secondary" data-go="sos-worse">Всё ещё плохо</button>
         </div>
       `);
       let i = 0;
@@ -407,8 +395,8 @@
         const el = document.getElementById("statement");
         if (!el) return;
         if (gsap && !reduceMotion) {
-          gsap.to(el, { opacity: 0, y: -6, duration: 0.3, onComplete: () => { el.innerHTML = `<b>${statements[i]}</b>`; gsap.fromTo(el, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.4 }); } });
-        } else el.innerHTML = `<b>${statements[i]}</b>`;
+          gsap.to(el, { opacity: 0, y: -6, duration: 0.3, onComplete: () => { el.textContent = statements[i]; gsap.fromTo(el, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.4 }); } });
+        } else el.textContent = statements[i];
       }, 8000);
       startBreathing(mode, 120);
     },
@@ -431,7 +419,7 @@
         <p>Если тревога не отпускает или такие состояния повторяются, это важный сигнал: с этим лучше работать вместе со специалистом.</p>
         ${psychologistCard()}
         <button class="btn secondary" data-go="breathing">Ещё подышать</button>
-        <div class="notice danger">Если есть мысли причинить себе вред — <a href="#crisis" style="color:var(--danger);font-weight:700">откройте экран экстренной помощи</a>.</div>
+        <div class="notice danger">Если есть мысли причинить себе вред — <a href="#crisis" style="color:inherit;font-weight:800">откройте экран экстренной помощи</a>.</div>
       `);
     },
 
@@ -439,8 +427,7 @@
       const t = C.techniques.find((x) => x.id === id);
       if (!t) return go("today");
       render(`
-        <span class="icon-chip" style="width:64px;height:64px;border-radius:22px">${icon(t.id, 30)}</span>
-        <div><div class="eyebrow">${t.duration}</div><h1>${t.title}</h1></div>
+        <div><h1>${t.title}</h1><p class="muted" style="margin-top:8px">${t.duration}, ${t.short.toLowerCase()}</p></div>
         <p class="lead">${t.body}</p>
         ${t.tool && t.id !== "steps" ? `<button class="btn" data-go="${t.tool}">${icon("play", 16)} Начать</button>` : ""}
         ${t.id === "steps" ? stepsForm() : ""}
@@ -515,7 +502,6 @@
         const [name, action] = groups[i];
         render(`
           <div class="dots">${groups.map((_, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</div>
-          <div class="eyebrow center">Группа ${i + 1} из ${groups.length}</div>
           <h1 class="center">${name}</h1>
           <p class="center lead" id="pmr-text">${action} и удерживайте напряжение…</p>
           <div class="count" id="pmr-count">5</div>
@@ -529,7 +515,6 @@
         });
       };
       render(`
-        <span class="icon-chip" style="width:64px;height:64px;border-radius:22px">${icon("pmr", 30)}</span>
         <h1>Мышечная релаксация</h1>
         <p class="lead">Сядьте или лягте удобно. Мы пройдём ${groups.length} групп мышц: напрягаем 5 секунд, расслабляем 10. Напрягайте мышцы не до боли.</p>
         <button class="btn" id="start">${icon("play", 16)} Начать</button>
@@ -556,9 +541,9 @@
         ${entries.length ? `<h2>Прошлые записи</h2>` : ""}
         ${entries.slice().reverse().map((e) => `
           <div class="card entry">
-            <span class="eyebrow">${new Date(e.date).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })} · тревога ${e.level}/10</span>
             <span class="title">${esc(e.thought)}</span>
-            ${e.alternative ? `<span class="sub">→ ${esc(e.alternative)}</span>` : ""}
+            ${e.alternative ? `<span class="sub">${esc(e.alternative)}</span>` : ""}
+            <span class="sub">${new Date(e.date).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}, тревога ${e.level} из 10</span>
           </div>`).join("")}
         <p class="muted">Записи хранятся только на вашем устройстве.</p>
       `);
@@ -636,10 +621,9 @@
         if (i >= n) return finishTest(answers);
         render(`
           <div class="dots">${C.gad7.items.map((_, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</div>
-          <div class="eyebrow">Вопрос ${i + 1} из ${n}</div>
-          <p class="muted" style="margin-top:4px">${C.gad7.question}</p>
+          <p class="muted">${C.gad7.question}</p>
           <h1>${C.gad7.items[i]}</h1>
-          <div class="stack" style="margin-top:16px">
+          <div class="stack">
             ${C.gad7.options.map((o, v) => `<button class="option" data-v="${v}"><span class="dot"></span>${o}</button>`).join("")}
           </div>
         `);
@@ -663,22 +647,21 @@
       render(`
         <h1 class="center">Ваш результат</h1>
         <svg class="gauge" viewBox="0 0 240 135" aria-hidden="true">
-          <defs><linearGradient id="gaugeGrad" x1="0" x2="1"><stop offset="0" stop-color="#6cc5ae"/><stop offset=".55" stop-color="#f4b48a"/><stop offset="1" stop-color="#e0705a"/></linearGradient></defs>
           <path class="track" d="M20 120 A100 100 0 0 1 220 120" fill="none" stroke-width="16" stroke-linecap="round"/>
-          <path class="bar" id="gbar" d="M20 120 A100 100 0 0 1 220 120" fill="none" stroke-width="16" stroke-dasharray="${arc}" stroke-dashoffset="${arc}"/>
+          <path class="bar ${last.score >= 15 ? "bad" : last.score >= 10 ? "warn" : ""}" id="gbar" d="M20 120 A100 100 0 0 1 220 120" fill="none" stroke-width="16" stroke-dasharray="${arc}" stroke-dashoffset="${arc}"/>
         </svg>
         <div class="score"><span id="score">0</span><small> / 21</small></div>
-        <h2 class="center" style="margin-top:14px">${level.name}</h2>
-        ${prev ? `<p class="muted center">В прошлый раз: ${prev.score} ${prev.score > last.score ? "— стало лучше" : ""}</p>` : ""}
+        <h2 class="center">${level.name}</h2>
+        ${prev ? `<p class="muted center">В прошлый раз: ${prev.score}${prev.score > last.score ? ", стало лучше" : ""}</p>` : ""}
         <p class="lead">${level.text}</p>
         ${level.recommendPsychologist ? `
-          <div class="card warm-card"><p style="margin:0">${C.psychologist.text}</p></div>
-          <button class="btn warm" data-psy>${C.psychologist.button}</button>
+          <div class="card warm"><p>${C.psychologist.text}</p></div>
+          <button class="btn peach" data-psy>${C.psychologist.button}</button>
           <button class="btn secondary" data-go="course">Начать курс самопомощи</button>
         ` : `
           <button class="btn" data-go="course">Начать курс «14 дней спокойнее»</button>
         `}
-        <p class="muted" style="margin-top:16px">${C.gad7.note}</p>
+        <p class="muted">${C.gad7.note}</p>
       `);
       const bar = document.getElementById("gbar");
       const target = arc * (1 - last.score / 21);
@@ -694,13 +677,12 @@
       const done = store.get("course_done", []);
       render(`
         <div class="dots">${C.course.map((_, k) => `<i class="${done.includes(k + 1) || k + 1 === n ? "on" : ""}"></i>`).join("")}</div>
-        <div class="eyebrow">День ${n} из ${C.course.length}</div>
-        <h1>${d.title}</h1>
+        <div><h1>${d.title}</h1><p class="muted" style="margin-top:8px">День ${n} из ${C.course.length}</p></div>
         <p class="lead">${d.text}</p>
         <div class="card">
-          <div class="eyebrow" style="margin-bottom:6px">Практика дня</div>
-          <p style="margin:0">${d.practice}</p>
-          ${d.tool ? `<button class="btn secondary" style="margin-top:14px" data-go="${d.tool}">${icon(d.tool === "test" ? "test" : d.tool, 18)} Открыть упражнение</button>` : ""}
+          <span class="title">Практика дня</span>
+          <p style="margin-top:6px">${d.practice}</p>
+          ${d.tool ? `<button class="btn secondary" style="margin-top:16px" data-go="${d.tool}">${icon(d.tool === "test" ? "test" : d.tool, 18)} Открыть упражнение</button>` : ""}
         </div>
         ${done.includes(n)
           ? `<button class="btn secondary" data-go="course">День пройден ✓</button>`
@@ -722,16 +704,15 @@
 
     psychologist() {
       render(`
-        <span class="icon-chip warm" style="width:64px;height:64px;border-radius:22px">${icon("chat", 30)}</span>
         <h1>${C.psychologist.title}</h1>
         <p class="lead">Иногда техник недостаточно, и это нормально. Психолог поможет понять, откуда берётся тревога именно у вас, и подобрать то, что сработает.</p>
         <div class="stack">
-          <div class="card"><div class="row"><span class="icon-chip">${icon("clock")}</span><span class="grow"><span class="title">20 минут бесплатно</span><span class="sub">Познакомиться и понять, подходит ли специалист</span></span></div></div>
-          <div class="card"><div class="row"><span class="icon-chip">${icon("shield")}</span><span class="grow"><span class="title">Анонимно</span><span class="sub">Чат, аудио или видео — как вам удобнее</span></span></div></div>
-          <div class="card"><div class="row"><span class="icon-chip">${icon("swap")}</span><span class="grow"><span class="title">Бесплатная замена</span><span class="sub">Если специалист не подойдёт, подберут другого</span></span></div></div>
+          <div class="card"><div class="row"><span class="ico">${icon("clock", 26)}</span><span class="grow"><span class="title">20 минут бесплатно</span><span class="sub">Познакомиться и понять, подходит ли специалист</span></span></div></div>
+          <div class="card"><div class="row"><span class="ico">${icon("shield", 26)}</span><span class="grow"><span class="title">Анонимно</span><span class="sub">Чат, аудио или видео — как вам удобнее</span></span></div></div>
+          <div class="card"><div class="row"><span class="ico">${icon("swap", 26)}</span><span class="grow"><span class="title">Бесплатная замена</span><span class="sub">Если специалист не подойдёт, подберут другого</span></span></div></div>
         </div>
-        <button class="btn warm" style="margin-top:18px" data-psy>${C.psychologist.button}</button>
-        <p class="muted" style="margin-top:14px">Откроется сайт ПсиЧата. Ответы теста и записи дневника никуда не передаются.</p>
+        <button class="btn peach" data-psy>${C.psychologist.button}</button>
+        <p class="muted">Откроется сайт ПсиЧата. Ответы теста и записи дневника никуда не передаются.</p>
       `);
     },
 
@@ -758,15 +739,9 @@
 
   // ---------- Дыхательная сфера ----------
   function orbWidget() {
-    const particles = Array.from({ length: 14 }, (_, i) => {
-      const a = (i / 14) * Math.PI * 2;
-      const r = 120 + Math.random() * 40;
-      return `<i style="--dx:${Math.cos(a) * r}px;--dy:${Math.sin(a) * r}px;animation-delay:${(i * 0.43).toFixed(2)}s"></i>`;
-    }).join("");
     const c = 2 * Math.PI * 140;
     return `
       <div class="orb-stage">
-        <div class="particles">${particles}</div>
         <svg class="orb-ring" viewBox="0 0 300 300"><circle class="track" cx="150" cy="150" r="140"/>
           <circle class="bar" id="orb-bar" cx="150" cy="150" r="140" stroke-dasharray="${c}" stroke-dashoffset="${c}"/></svg>
         <div class="orb-halo h1" id="h1"></div>
@@ -847,7 +822,7 @@
     const area = d + ` L${pts[pts.length - 1][0].toFixed(1)} ${H - P} L${pts[0][0].toFixed(1)} ${H - P} Z`;
     const fmt = (s) => new Date(s).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
     return `<svg class="chart" viewBox="0 0 ${W} ${H + 10}" role="img" aria-label="График настроения">
-      ${[0, 2, 4].map((v) => `<line class="grid" x1="${P}" x2="${W - P}" y1="${y(v)}" y2="${y(v)}"/>`).join("")}
+      <line class="base" x1="${P}" x2="${W - P}" y1="${H - P}" y2="${H - P}"/>
       <path class="area" d="${area}"/>
       <path class="line" d="${d}"/>
       ${pts.map((p) => `<circle class="pt" cx="${p[0]}" cy="${p[1]}" r="4"/>`).join("")}
@@ -862,12 +837,12 @@
     const step = (W - 2 * P) / tests.length;
     const y = (v) => H - P - (v * (H - 2 * P)) / 21;
     return `<svg class="chart" viewBox="0 0 ${W} ${H + 10}" role="img" aria-label="История результатов теста">
-      ${[0, 10, 21].map((v) => `<line class="grid" x1="${P}" x2="${W - P}" y1="${y(v)}" y2="${y(v)}"/><text x="${P - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join("")}
+      <line class="base" x1="${P}" x2="${W - P}" y1="${H - P}" y2="${H - P}"/>
       ${tests.map((t, i) => {
         const cx = P + step * i + step / 2;
         const cls = t.score >= 15 ? "bad" : t.score >= 10 ? "warn" : "";
         return `<rect class="bar ${cls}" x="${cx - bw / 2}" y="${y(t.score)}" width="${bw}" height="${Math.max(H - P - y(t.score), 3)}" rx="8"/>
-          <text x="${cx}" y="${y(t.score) - 6}" text-anchor="middle">${t.score}</text>
+          <text class="val" x="${cx}" y="${y(t.score) - 8}" text-anchor="middle">${t.score} из 21</text>
           <text x="${cx}" y="${H + 8}" text-anchor="middle">${new Date(t.date).toLocaleDateString("ru-RU", { day: "numeric", month: "numeric" })}</text>`;
       }).join("")}
     </svg>`;
